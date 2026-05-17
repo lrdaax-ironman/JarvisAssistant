@@ -339,7 +339,6 @@ function handleCommand(command) {
     message = "Interface remise a l'etat initial.";
     resetInterface();
     respond(message);
-    addHistory(cleanCommand, message);
     input.value = "";
     return;
   } else {
