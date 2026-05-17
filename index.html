@@ -7,6 +7,12 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div id="welcome-sequence" class="welcome-sequence" aria-live="polite">
+    <div class="welcome-core"></div>
+    <p>Initialisation JARVIS</p>
+    <strong id="welcome-message">Connexion au noyau principal...</strong>
+  </div>
+
   <div id="app" class="app">
     <header class="header">
       <div class="brand">
@@ -35,6 +41,12 @@
           <li><button type="button" data-command="mode analyse">mode analyse</button></li>
           <li><button type="button" data-command="ouvre google">ouvre google</button></li>
           <li><button type="button" data-command="clear">clear</button></li>
+          <li><button type="button" data-command="presentation">presentation</button></li>
+          <li><button type="button" data-command="statut">statut</button></li>
+          <li><button type="button" data-command="veille">veille</button></li>
+          <li><button type="button" data-command="focus">focus</button></li>
+          <li><button type="button" data-command="stop">stop</button></li>
+          <li><button type="button" data-command="reset">reset</button></li>
         </ul>
       </section>
 
@@ -100,6 +112,12 @@
             <span>Statut vocal</span>
             <strong id="voice-state">Repos</strong>
             <small id="voice-detail">Micro inactif</small>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide">
+            <span>Mode focus</span>
+            <strong id="focus-state">Inactif</strong>
+            <small id="focus-detail">Aucun minuteur actif</small>
           </article>
         </div>
 
