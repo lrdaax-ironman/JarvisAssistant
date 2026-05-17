@@ -19,6 +19,13 @@ const voiceState = document.getElementById("voice-state");
 const voiceDetail = document.getElementById("voice-detail");
 const focusState = document.getElementById("focus-state");
 const focusDetail = document.getElementById("focus-detail");
+const voiceSelect = document.getElementById("voice-select");
+const voiceName = document.getElementById("voice-name");
+const voiceSettingsSummary = document.getElementById("voice-settings-summary");
+const speechRate = document.getElementById("speech-rate");
+const speechRateValue = document.getElementById("speech-rate-value");
+const speechPitch = document.getElementById("speech-pitch");
+const speechPitchValue = document.getElementById("speech-pitch-value");
 
 const metricElements = {
   cpu: {
@@ -50,7 +57,13 @@ const availableCommands = [
   "veille",
   "focus",
   "stop",
-  "reset"
+  "reset",
+  "voix",
+  "change voix",
+  "plus lentement",
+  "plus vite",
+  "voix grave",
+  "voix normale"
 ];
 
 let isListening = false;
@@ -59,6 +72,11 @@ let analysisTimers = [];
 let veilleTimers = [];
 let focusInterval = null;
 let focusEndsAt = 0;
+let availableVoices = [];
+let selectedVoiceIndex = 0;
+let currentSpeechRate = 1;
+let currentSpeechPitch = 0.9;
+let voiceProfileInitialized = false;
 
 // Normalise les commandes vocales et clavier sans changer les commandes supportees.
 function normalizeCommand(command) {
@@ -84,6 +102,98 @@ function setSystemStatus(label, detail = "Noyau stable") {
 function setVoiceStatus(label, detail = "Micro inactif") {
   voiceState.textContent = label;
   voiceDetail.textContent = detail;
+}
+
+function getSelectedVoice() {
+  return availableVoices[selectedVoiceIndex] || null;
+}
+
+function updateVoiceSummary() {
+  const selectedVoice = getSelectedVoice();
+  const name = selectedVoice ? selectedVoice.name : "Voix navigateur";
+  const lang = selectedVoice && selectedVoice.lang ? ` (${selectedVoice.lang})` : "";
+
+  voiceName.textContent = name;
+  voiceSettingsSummary.textContent = `Vitesse ${currentSpeechRate.toFixed(2)} / Pitch ${currentSpeechPitch.toFixed(2)}`;
+  speechRateValue.textContent = currentSpeechRate.toFixed(2);
+  speechPitchValue.textContent = currentSpeechPitch.toFixed(2);
+  speechRate.value = currentSpeechRate;
+  speechPitch.value = currentSpeechPitch;
+  setVoiceStatus("Repos", `${name}${lang}`);
+}
+
+function populateVoiceSelect() {
+  voiceSelect.innerHTML = "";
+
+  if (!availableVoices.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Voix par defaut du navigateur";
+    voiceSelect.append(option);
+    updateVoiceSummary();
+    return;
+  }
+
+  availableVoices.forEach((voice, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `${voice.name} - ${voice.lang}`;
+    voiceSelect.append(option);
+  });
+
+  voiceSelect.value = String(selectedVoiceIndex);
+  updateVoiceSummary();
+}
+
+function loadBrowserVoices() {
+  if (!("speechSynthesis" in window)) {
+    populateVoiceSelect();
+    return;
+  }
+
+  availableVoices = window.speechSynthesis.getVoices();
+  const defaultIndex = availableVoices.findIndex((voice) => voice.default);
+  if (!voiceProfileInitialized) {
+    selectedVoiceIndex = defaultIndex >= 0 ? defaultIndex : 0;
+    voiceProfileInitialized = true;
+  } else if (selectedVoiceIndex >= availableVoices.length) {
+    selectedVoiceIndex = defaultIndex >= 0 ? defaultIndex : 0;
+  }
+  populateVoiceSelect();
+}
+
+function changeVoice(step = 1) {
+  if (!availableVoices.length) {
+    return "Aucune voix alternative n'est disponible dans ce navigateur pour le moment.";
+  }
+
+  selectedVoiceIndex = (selectedVoiceIndex + step + availableVoices.length) % availableVoices.length;
+  voiceSelect.value = String(selectedVoiceIndex);
+  updateVoiceSummary();
+
+  const selectedVoice = getSelectedVoice();
+  return `Je m'en occupe. Nouvelle voix active : ${selectedVoice.name}.`;
+}
+
+function setDefaultVoiceProfile() {
+  const defaultIndex = availableVoices.findIndex((voice) => voice.default);
+  selectedVoiceIndex = defaultIndex >= 0 ? defaultIndex : 0;
+  currentSpeechRate = 1;
+  currentSpeechPitch = 0.9;
+  voiceSelect.value = availableVoices.length ? String(selectedVoiceIndex) : "";
+  updateVoiceSummary();
+}
+
+function changeSpeechRate(delta) {
+  currentSpeechRate = Math.max(0.7, Math.min(1.4, Number((currentSpeechRate + delta).toFixed(2))));
+  updateVoiceSummary();
+  return currentSpeechRate.toFixed(2);
+}
+
+function setSpeechPitch(value) {
+  currentSpeechPitch = Math.max(0.6, Math.min(1.4, Number(value.toFixed(2))));
+  updateVoiceSummary();
+  return currentSpeechPitch.toFixed(2);
 }
 
 function setResponding(active) {
@@ -152,8 +262,14 @@ function speak(text) {
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "fr-FR";
-  utterance.rate = 1;
-  utterance.pitch = 0.9;
+  utterance.rate = currentSpeechRate;
+  utterance.pitch = currentSpeechPitch;
+
+  const selectedVoice = getSelectedVoice();
+  if (selectedVoice) {
+    utterance.voice = selectedVoice;
+    utterance.lang = selectedVoice.lang || "fr-FR";
+  }
 
   utterance.onend = () => {
     if (token === speechToken) setSpeaking(false);
@@ -294,53 +410,72 @@ function handleCommand(command) {
   let message = "";
 
   if (cleanCommand === "aide") {
-    message = commandListMessage();
+    message = `Bien recu monsieur. ${commandListMessage()}`;
   } else if (cleanCommand === "heure") {
     const now = new Date();
-    message = `Il est ${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}.`;
+    message = `Bien recu monsieur. Il est ${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}.`;
   } else if (cleanCommand === "date") {
     const today = new Date();
-    message = `Nous sommes le ${today.toLocaleDateString("fr-FR")}.`;
+    message = `Bien recu monsieur. Nous sommes le ${today.toLocaleDateString("fr-FR")}.`;
   } else if (cleanCommand === "ouvre google") {
-    message = "Ouverture de Google.";
+    message = "Je m'en occupe. Ouverture de Google.";
     window.open("https://www.google.com", "_blank");
   } else if (cleanCommand === "mode analyse") {
-    message = "Analyse systeme en cours.";
+    message = "Bien recu monsieur. Analyse en cours.";
     addHistory(cleanCommand, message);
     startAnalysisMode();
     input.value = "";
     return;
   } else if (cleanCommand === "clear") {
     clearHistory();
-    respond("Historique vide.");
+    respond("Commande executee. Historique vide.");
     input.value = "";
     return;
   } else if (cleanCommand === "presentation") {
-    message = "Je suis JARVIS. Je peux afficher l'heure, la date, ouvrir Google, lancer une analyse locale, surveiller les informations importantes, demarrer un focus de 25 minutes, lire mes reponses et tenir un historique des commandes.";
+    message = "Bien recu monsieur. Je suis JARVIS, votre assistant personnel. Je peux afficher l'heure, la date, ouvrir Google, lancer une analyse locale, rester en veille, demarrer un focus de 25 minutes, gerer ma voix et tenir l'historique des commandes.";
   } else if (cleanCommand === "statut") {
-    message = buildStatusReport();
+    message = `Bien recu monsieur. ${buildStatusReport()}`;
   } else if (cleanCommand === "veille") {
-    message = "Veille locale active. Analyse des signaux importants en cours.";
+    message = "Je reste en veille. Analyse des signaux importants en cours.";
     addHistory(cleanCommand, message);
     startWatchMode();
     input.value = "";
     return;
   } else if (cleanCommand === "focus") {
-    message = "Mode focus lance pour 25 minutes. Je garde le minuteur actif sur le dashboard.";
+    message = "Bien recu monsieur. Mode focus lance pour 25 minutes. Je garde le minuteur actif sur le dashboard.";
     startFocusTimer();
   } else if (cleanCommand === "stop") {
-    message = "Synthese vocale arretee.";
+    message = "Commande executee. Synthese vocale arretee.";
     stopSpeech();
     respond(message, false);
     addHistory(cleanCommand, message);
     input.value = "";
     return;
   } else if (cleanCommand === "reset") {
-    message = "Interface remise a l'etat initial.";
+    message = "Commande executee. Interface remise a l'etat initial.";
     resetInterface();
     respond(message);
     input.value = "";
     return;
+  } else if (cleanCommand === "voix") {
+    const selectedVoice = getSelectedVoice();
+    const name = selectedVoice ? selectedVoice.name : "la voix par defaut du navigateur";
+    const lang = selectedVoice && selectedVoice.lang ? ` en ${selectedVoice.lang}` : "";
+    message = `Bien recu monsieur. J'utilise ${name}${lang}, avec une vitesse ${currentSpeechRate.toFixed(2)} et un pitch ${currentSpeechPitch.toFixed(2)}.`;
+  } else if (cleanCommand === "change voix") {
+    message = changeVoice();
+  } else if (cleanCommand === "plus lentement") {
+    const rate = changeSpeechRate(-0.1);
+    message = `Bien recu monsieur. Je parlerai plus lentement. Vitesse actuelle : ${rate}.`;
+  } else if (cleanCommand === "plus vite") {
+    const rate = changeSpeechRate(0.1);
+    message = `Bien recu monsieur. J'augmente la vitesse. Vitesse actuelle : ${rate}.`;
+  } else if (cleanCommand === "voix grave") {
+    const pitch = setSpeechPitch(0.7);
+    message = `Je m'en occupe. Voix plus grave activee. Pitch actuel : ${pitch}.`;
+  } else if (cleanCommand === "voix normale") {
+    setDefaultVoiceProfile();
+    message = "Commande executee. Voix, vitesse et pitch remis au profil par defaut.";
   } else {
     message = `Commande "${cleanCommand}" non reconnue. Essayez "aide" pour voir les commandes, ou utilisez "presentation" pour decouvrir mes capacites.`;
   }
@@ -361,7 +496,7 @@ function startAnalysisMode() {
 
   coreLabel.textContent = "SCAN";
   setSystemStatus("Analyse en cours...", "Diagnostics actifs");
-  respond("Analyse systeme en cours.");
+  respond("Analyse en cours.");
 
   const steps = [
     { delay: 800, text: "Scan CPU termine...", metrics: { cpu: 76, memory: 49, network: 88 } },
@@ -391,7 +526,7 @@ function startWatchMode() {
   clearTimedSequences();
   coreLabel.textContent = "WATCH";
   setSystemStatus("Veille active", "Priorites locales en analyse");
-  respond("Veille locale active. Analyse des signaux importants en cours.");
+  respond("Je reste en veille. Analyse des signaux importants en cours.");
 
   const steps = [
     "Verification agenda local simulee...",
@@ -422,6 +557,7 @@ function resetInterface() {
   stopSpeech();
   clearHistory();
   input.value = "";
+  setDefaultVoiceProfile();
   coreLabel.textContent = "ONLINE";
   setListening(false);
   setResponding(false);
@@ -504,12 +640,42 @@ voiceBtn.addEventListener("click", () => {
   };
 });
 
+voiceSelect.addEventListener("change", () => {
+  const nextIndex = Number(voiceSelect.value);
+  selectedVoiceIndex = Number.isFinite(nextIndex) ? nextIndex : 0;
+  updateVoiceSummary();
+  respond("Bien recu monsieur. Voix mise a jour.");
+});
+
+speechRate.addEventListener("input", () => {
+  currentSpeechRate = Number(speechRate.value);
+  updateVoiceSummary();
+});
+
+speechRate.addEventListener("change", () => {
+  respond(`Commande executee. Vitesse de parole reglee sur ${currentSpeechRate.toFixed(2)}.`);
+});
+
+speechPitch.addEventListener("input", () => {
+  currentSpeechPitch = Number(speechPitch.value);
+  updateVoiceSummary();
+});
+
+speechPitch.addEventListener("change", () => {
+  respond(`Commande executee. Pitch vocal regle sur ${currentSpeechPitch.toFixed(2)}.`);
+});
+
 updateClock();
 updateMetrics();
+loadBrowserVoices();
 setSystemStatus("Systeme en ligne", "Noyau stable");
-setVoiceStatus("Repos", "Micro inactif");
+updateVoiceSummary();
 updateFocusCard();
 initWelcomeSequence();
 
 window.setInterval(updateClock, 1000);
 window.setInterval(updateMetrics, 3000);
+
+if ("speechSynthesis" in window) {
+  window.speechSynthesis.onvoiceschanged = loadBrowserVoices;
+}
