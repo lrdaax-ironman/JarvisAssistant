@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JARVIS Assistant</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div>
+        <h1>J.A.R.V.I.S</h1>
+        <p>Assistant personnel intelligent</p>
+      </div>
+      <span id="status" class="status">Système en ligne</span>
+    </header>
+
+    <main class="dashboard">
+      <section class="panel">
+        <h2>Commandes</h2>
+        <ul>
+          <li>aide</li>
+          <li>heure</li>
+          <li>date</li>
+          <li>mode analyse</li>
+          <li>ouvre google</li>
+          <li>clear</li>
+        </ul>
+      </section>
+
+      <section class="core-section">
+        <div class="core">
+          <span>ONLINE</span>
+        </div>
+
+        <div class="response-box">
+          <h2>Réponse</h2>
+          <p id="assistant-response">Bonjour monsieur. Système prêt.</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>État système</h2>
+        <div class="metric">
+          <span>CPU</span>
+          <div><span style="width: 72%"></span></div>
+        </div>
+        <div class="metric">
+          <span>Mémoire</span>
+          <div><span style="width: 48%"></span></div>
+        </div>
+        <div class="metric">
+          <span>Réseau</span>
+          <div><span style="width: 91%"></span></div>
+        </div>
+      </section>
+    </main>
+
+    <section class="console">
+      <input id="command-input" type="text" placeholder="Entrez une commande..." />
+      <button id="send-btn">Envoyer</button>
+      <button id="voice-btn">🎙️</button>
+    </section>
+
+    <section class="history">
+      <h2>Historique</h2>
+      <ul id="history-list"></ul>
+    </section>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
