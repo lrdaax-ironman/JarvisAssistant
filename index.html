@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JARVIS Assistant</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="voice.css" />
 </head>
 <body>
   <div id="welcome-sequence" class="welcome-sequence" aria-live="polite">
@@ -47,6 +48,12 @@
           <li><button type="button" data-command="focus">focus</button></li>
           <li><button type="button" data-command="stop">stop</button></li>
           <li><button type="button" data-command="reset">reset</button></li>
+          <li><button type="button" data-command="voix">voix</button></li>
+          <li><button type="button" data-command="change voix">change voix</button></li>
+          <li><button type="button" data-command="plus lentement">plus lentement</button></li>
+          <li><button type="button" data-command="plus vite">plus vite</button></li>
+          <li><button type="button" data-command="voix grave">voix grave</button></li>
+          <li><button type="button" data-command="voix normale">voix normale</button></li>
         </ul>
       </section>
 
@@ -119,6 +126,33 @@
             <strong id="focus-state">Inactif</strong>
             <small id="focus-detail">Aucun minuteur actif</small>
           </article>
+
+          <article class="dashboard-card dashboard-card-wide voice-card">
+            <span>Voix JARVIS</span>
+            <strong id="voice-name">Voix navigateur</strong>
+            <small id="voice-settings-summary">Vitesse 1.00 / Pitch 0.90</small>
+          </article>
+        </div>
+
+        <div class="voice-controls" aria-label="Reglages vocaux">
+          <label for="voice-select">
+            Voix
+            <select id="voice-select">
+              <option value="">Chargement des voix...</option>
+            </select>
+          </label>
+
+          <label for="speech-rate">
+            Vitesse
+            <input id="speech-rate" type="range" min="0.7" max="1.4" step="0.05" value="1" />
+            <span id="speech-rate-value">1.00</span>
+          </label>
+
+          <label for="speech-pitch">
+            Pitch
+            <input id="speech-pitch" type="range" min="0.6" max="1.4" step="0.05" value="0.9" />
+            <span id="speech-pitch-value">0.90</span>
+          </label>
         </div>
 
         <div class="metrics">
