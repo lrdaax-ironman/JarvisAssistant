@@ -8,6 +8,8 @@ const statusText = document.getElementById("status");
 const core = document.getElementById("core");
 const coreLabel = document.getElementById("core-label");
 const clearHistoryBtn = document.getElementById("clear-history-btn");
+const welcomeSequence = document.getElementById("welcome-sequence");
+const welcomeMessage = document.getElementById("welcome-message");
 
 const currentTime = document.getElementById("current-time");
 const currentDate = document.getElementById("current-date");
@@ -15,6 +17,8 @@ const systemState = document.getElementById("system-state");
 const systemDetail = document.getElementById("system-detail");
 const voiceState = document.getElementById("voice-state");
 const voiceDetail = document.getElementById("voice-detail");
+const focusState = document.getElementById("focus-state");
+const focusDetail = document.getElementById("focus-detail");
 
 const metricElements = {
   cpu: {
@@ -34,9 +38,27 @@ const metricElements = {
   }
 };
 
+const availableCommands = [
+  "aide",
+  "heure",
+  "date",
+  "mode analyse",
+  "ouvre google",
+  "clear",
+  "presentation",
+  "statut",
+  "veille",
+  "focus",
+  "stop",
+  "reset"
+];
+
 let isListening = false;
 let speechToken = 0;
 let analysisTimers = [];
+let veilleTimers = [];
+let focusInterval = null;
+let focusEndsAt = 0;
 
 // Normalise les commandes vocales et clavier sans changer les commandes supportees.
 function normalizeCommand(command) {
@@ -64,12 +86,26 @@ function setVoiceStatus(label, detail = "Micro inactif") {
   voiceDetail.textContent = detail;
 }
 
+function setResponding(active) {
+  responseBox.classList.toggle("is-responding", active);
+  app.classList.toggle("is-responding", active);
+}
+
+function pulseResponse() {
+  setResponding(false);
+  window.setTimeout(() => setResponding(true), 20);
+  window.setTimeout(() => setResponding(false), 950);
+}
+
 function setSpeaking(active) {
   core.classList.toggle("is-speaking", active);
   app.classList.toggle("is-speaking", active);
+
   if (active) {
+    coreLabel.textContent = "TALK";
     setVoiceStatus("Synthese", "Assistant en parole");
   } else if (!isListening) {
+    coreLabel.textContent = "ONLINE";
     setVoiceStatus("Repos", "Micro inactif");
   }
 }
@@ -86,12 +122,20 @@ function setListening(active) {
     setSystemStatus("Ecoute en cours...", "Canal vocal ouvert");
     setVoiceStatus("Ecoute", "Micro actif");
   } else {
-    coreLabel.textContent = "ONLINE";
+    coreLabel.textContent = core.classList.contains("is-speaking") ? "TALK" : "ONLINE";
     setSystemStatus("Systeme en ligne", "Noyau stable");
     if (!core.classList.contains("is-speaking")) {
       setVoiceStatus("Repos", "Micro inactif");
     }
   }
+}
+
+function stopSpeech() {
+  speechToken += 1;
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+  setSpeaking(false);
 }
 
 // Utilise uniquement l'API navigateur native de synthese vocale.
@@ -125,6 +169,7 @@ function speak(text) {
 
 function respond(message, shouldSpeak = true) {
   responseBox.textContent = message;
+  pulseResponse();
   if (shouldSpeak) speak(message);
 }
 
@@ -135,18 +180,25 @@ function addHistory(command, response) {
     minute: "2-digit"
   });
 
-  item.className = "history-item";
-  item.innerHTML = `
-    <span class="history-time">${time}</span>
-    <div>
-      <div class="history-command">&gt; ${command}</div>
-      <div class="history-response">${response}</div>
-    </div>
-  `;
+  const timeElement = document.createElement("span");
+  const contentElement = document.createElement("div");
+  const commandElement = document.createElement("div");
+  const responseElement = document.createElement("div");
 
+  item.className = "history-item";
+  timeElement.className = "history-time";
+  commandElement.className = "history-command";
+  responseElement.className = "history-response";
+
+  timeElement.textContent = time;
+  commandElement.textContent = `> ${command}`;
+  responseElement.textContent = response;
+
+  contentElement.append(commandElement, responseElement);
+  item.append(timeElement, contentElement);
   historyList.prepend(item);
 
-  if (historyList.children.length > 14) {
+  if (historyList.children.length > 16) {
     historyList.removeChild(historyList.lastChild);
   }
 }
@@ -186,6 +238,54 @@ function updateMetrics() {
   setMetric("network", Math.round(metricElements.network.base + Math.sin(time / 5) * 6));
 }
 
+function updateFocusCard() {
+  if (!focusInterval) {
+    focusState.textContent = "Inactif";
+    focusDetail.textContent = "Aucun minuteur actif";
+    return;
+  }
+
+  const remaining = Math.max(0, Math.ceil((focusEndsAt - Date.now()) / 1000));
+  const minutes = String(Math.floor(remaining / 60)).padStart(2, "0");
+  const seconds = String(remaining % 60).padStart(2, "0");
+
+  focusState.textContent = `${minutes}:${seconds}`;
+  focusDetail.textContent = "Session de concentration";
+
+  if (remaining <= 0) {
+    stopFocusTimer();
+    respond("Session focus terminee. Vous pouvez faire une pause.");
+  }
+}
+
+function startFocusTimer() {
+  stopFocusTimer(false);
+  focusEndsAt = Date.now() + 25 * 60 * 1000;
+  focusInterval = window.setInterval(updateFocusCard, 1000);
+  updateFocusCard();
+  setSystemStatus("Mode focus actif", "Minuteur 25 minutes");
+}
+
+function stopFocusTimer(resetCard = true) {
+  if (focusInterval) {
+    window.clearInterval(focusInterval);
+    focusInterval = null;
+  }
+  focusEndsAt = 0;
+  if (resetCard) updateFocusCard();
+}
+
+function clearTimedSequences() {
+  analysisTimers.forEach((timer) => window.clearTimeout(timer));
+  veilleTimers.forEach((timer) => window.clearTimeout(timer));
+  analysisTimers = [];
+  veilleTimers = [];
+}
+
+function commandListMessage() {
+  return `Commandes disponibles : ${availableCommands.join(", ")}.`;
+}
+
 function handleCommand(command) {
   const cleanCommand = normalizeCommand(command);
 
@@ -194,7 +294,7 @@ function handleCommand(command) {
   let message = "";
 
   if (cleanCommand === "aide") {
-    message = "Commandes disponibles : aide, heure, date, mode analyse, ouvre google, clear.";
+    message = commandListMessage();
   } else if (cleanCommand === "heure") {
     const now = new Date();
     message = `Il est ${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}.`;
@@ -215,8 +315,35 @@ function handleCommand(command) {
     respond("Historique vide.");
     input.value = "";
     return;
+  } else if (cleanCommand === "presentation") {
+    message = "Je suis JARVIS. Je peux afficher l'heure, la date, ouvrir Google, lancer une analyse locale, surveiller les informations importantes, demarrer un focus de 25 minutes, lire mes reponses et tenir un historique des commandes.";
+  } else if (cleanCommand === "statut") {
+    message = buildStatusReport();
+  } else if (cleanCommand === "veille") {
+    message = "Veille locale active. Analyse des signaux importants en cours.";
+    addHistory(cleanCommand, message);
+    startWatchMode();
+    input.value = "";
+    return;
+  } else if (cleanCommand === "focus") {
+    message = "Mode focus lance pour 25 minutes. Je garde le minuteur actif sur le dashboard.";
+    startFocusTimer();
+  } else if (cleanCommand === "stop") {
+    message = "Synthese vocale arretee.";
+    stopSpeech();
+    respond(message, false);
+    addHistory(cleanCommand, message);
+    input.value = "";
+    return;
+  } else if (cleanCommand === "reset") {
+    message = "Interface remise a l'etat initial.";
+    resetInterface();
+    respond(message);
+    addHistory(cleanCommand, message);
+    input.value = "";
+    return;
   } else {
-    message = "Commande non reconnue. Dites aide pour afficher les commandes disponibles.";
+    message = `Commande "${cleanCommand}" non reconnue. Essayez "aide" pour voir les commandes, ou utilisez "presentation" pour decouvrir mes capacites.`;
   }
 
   respond(message);
@@ -224,10 +351,14 @@ function handleCommand(command) {
   input.value = "";
 }
 
+function buildStatusReport() {
+  const focusText = focusInterval ? `focus actif (${focusState.textContent} restantes)` : "focus inactif";
+  return `Statut complet : ${systemState.textContent}. Vocal : ${voiceState.textContent}. CPU ${metricElements.cpu.value.textContent}, memoire ${metricElements.memory.value.textContent}, reseau ${metricElements.network.value.textContent}. ${focusText}. Historique : ${historyList.children.length} entree(s).`;
+}
+
 // Simulation volontairement locale pour garder le projet ouvrable en simple fichier HTML.
 function startAnalysisMode() {
-  analysisTimers.forEach((timer) => window.clearTimeout(timer));
-  analysisTimers = [];
+  clearTimedSequences();
 
   coreLabel.textContent = "SCAN";
   setSystemStatus("Analyse en cours...", "Diagnostics actifs");
@@ -242,6 +373,7 @@ function startAnalysisMode() {
   steps.forEach((step) => {
     const timer = window.setTimeout(() => {
       responseBox.textContent = step.text;
+      pulseResponse();
       Object.entries(step.metrics).forEach(([name, value]) => setMetric(name, value));
     }, step.delay);
     analysisTimers.push(timer);
@@ -254,6 +386,70 @@ function startAnalysisMode() {
   }, 3400);
 
   analysisTimers.push(finalTimer);
+}
+
+function startWatchMode() {
+  clearTimedSequences();
+  coreLabel.textContent = "WATCH";
+  setSystemStatus("Veille active", "Priorites locales en analyse");
+  respond("Veille locale active. Analyse des signaux importants en cours.");
+
+  const steps = [
+    "Verification agenda local simulee...",
+    "Priorites detectees : focus, maintenance, commandes vocales.",
+    "Alerte critique : aucune. Systeme disponible."
+  ];
+
+  steps.forEach((text, index) => {
+    const timer = window.setTimeout(() => {
+      responseBox.textContent = text;
+      pulseResponse();
+    }, 900 + index * 900);
+    veilleTimers.push(timer);
+  });
+
+  const finalTimer = window.setTimeout(() => {
+    coreLabel.textContent = "ONLINE";
+    setSystemStatus("Systeme en ligne", "Veille terminee");
+    respond("Veille terminee. Rien d'urgent a signaler.");
+  }, 3900);
+
+  veilleTimers.push(finalTimer);
+}
+
+function resetInterface() {
+  clearTimedSequences();
+  stopFocusTimer();
+  stopSpeech();
+  clearHistory();
+  input.value = "";
+  coreLabel.textContent = "ONLINE";
+  setListening(false);
+  setResponding(false);
+  setSystemStatus("Systeme en ligne", "Noyau stable");
+  setVoiceStatus("Repos", "Micro inactif");
+  responseBox.textContent = "Bonjour monsieur. Systeme pret.";
+  updateClock();
+  updateMetrics();
+}
+
+function initWelcomeSequence() {
+  const bootMessages = [
+    "Connexion au noyau principal...",
+    "Calibration des modules vocaux...",
+    "Interface operationnelle."
+  ];
+
+  bootMessages.forEach((message, index) => {
+    window.setTimeout(() => {
+      welcomeMessage.textContent = message;
+    }, index * 700);
+  });
+
+  window.setTimeout(() => {
+    welcomeSequence.classList.add("is-hidden");
+    respond("Bonjour monsieur. JARVIS est en ligne. Dites presentation pour connaitre mes capacites.");
+  }, 2600);
 }
 
 sendBtn.addEventListener("click", () => {
@@ -301,7 +497,7 @@ voiceBtn.addEventListener("click", () => {
   };
 
   recognition.onerror = () => {
-    respond("Je n'ai pas compris la commande vocale.");
+    respond("Je n'ai pas compris la commande vocale. Essayez une commande courte, comme aide, statut ou focus.");
   };
 
   recognition.onend = () => {
@@ -313,6 +509,8 @@ updateClock();
 updateMetrics();
 setSystemStatus("Systeme en ligne", "Noyau stable");
 setVoiceStatus("Repos", "Micro inactif");
+updateFocusCard();
+initWelcomeSequence();
 
 window.setInterval(updateClock, 1000);
 window.setInterval(updateMetrics, 3000);
