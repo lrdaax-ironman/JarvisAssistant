@@ -7,65 +7,140 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app">
+  <div id="app" class="app">
     <header class="header">
-      <div>
+      <div class="brand">
+        <span class="eyebrow">Interface HUD active</span>
         <h1>J.A.R.V.I.S</h1>
         <p>Assistant personnel intelligent</p>
       </div>
-      <span id="status" class="status">Système en ligne</span>
+
+      <div class="status-pill" aria-live="polite">
+        <span class="status-dot"></span>
+        <span id="status">Systeme en ligne</span>
+      </div>
     </header>
 
-    <main class="dashboard">
-      <section class="panel">
-        <h2>Commandes</h2>
-        <ul>
-          <li>aide</li>
-          <li>heure</li>
-          <li>date</li>
-          <li>mode analyse</li>
-          <li>ouvre google</li>
-          <li>clear</li>
+    <main class="hud-grid">
+      <section class="panel command-panel" aria-labelledby="commands-title">
+        <div class="panel-heading">
+          <span>01</span>
+          <h2 id="commands-title">Commandes</h2>
+        </div>
+
+        <ul class="command-list">
+          <li><button type="button" data-command="aide">aide</button></li>
+          <li><button type="button" data-command="heure">heure</button></li>
+          <li><button type="button" data-command="date">date</button></li>
+          <li><button type="button" data-command="mode analyse">mode analyse</button></li>
+          <li><button type="button" data-command="ouvre google">ouvre google</button></li>
+          <li><button type="button" data-command="clear">clear</button></li>
         </ul>
       </section>
 
-      <section class="core-section">
-        <div class="core">
-          <span>ONLINE</span>
+      <section class="core-section" aria-labelledby="response-title">
+        <div id="core" class="core" aria-hidden="true">
+          <div class="core-ring core-ring-outer"></div>
+          <div class="core-ring core-ring-inner"></div>
+          <div class="core-center">
+            <span id="core-label">ONLINE</span>
+            <div class="voice-bars" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
         </div>
 
         <div class="response-box">
-          <h2>Réponse</h2>
-          <p id="assistant-response">Bonjour monsieur. Système prêt.</p>
+          <div class="panel-heading">
+            <span>02</span>
+            <h2 id="response-title">Reponse</h2>
+          </div>
+          <p id="assistant-response">Bonjour monsieur. Systeme pret.</p>
         </div>
+
+        <section class="console" aria-label="Console de commande">
+          <input id="command-input" type="text" autocomplete="off" placeholder="Entrez une commande..." />
+          <button id="send-btn" type="button">Envoyer</button>
+          <button id="voice-btn" class="icon-btn" type="button" aria-label="Activer le micro">
+            <span class="mic-icon" aria-hidden="true"></span>
+          </button>
+        </section>
       </section>
 
-      <section class="panel">
-        <h2>État système</h2>
-        <div class="metric">
-          <span>CPU</span>
-          <div><span style="width: 72%"></span></div>
+      <section class="panel dashboard-panel" aria-labelledby="dashboard-title">
+        <div class="panel-heading">
+          <span>03</span>
+          <h2 id="dashboard-title">Dashboard</h2>
         </div>
-        <div class="metric">
-          <span>Mémoire</span>
-          <div><span style="width: 48%"></span></div>
+
+        <div class="dashboard-cards">
+          <article class="dashboard-card">
+            <span>Heure</span>
+            <strong id="current-time">--:--</strong>
+            <small>Synchronisee</small>
+          </article>
+
+          <article class="dashboard-card">
+            <span>Date</span>
+            <strong id="current-date">--</strong>
+            <small>Calendrier local</small>
+          </article>
+
+          <article class="dashboard-card">
+            <span>Statut systeme</span>
+            <strong id="system-state">En ligne</strong>
+            <small id="system-detail">Noyau stable</small>
+          </article>
+
+          <article class="dashboard-card">
+            <span>Statut vocal</span>
+            <strong id="voice-state">Repos</strong>
+            <small id="voice-detail">Micro inactif</small>
+          </article>
         </div>
-        <div class="metric">
-          <span>Réseau</span>
-          <div><span style="width: 91%"></span></div>
+
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-label">
+              <span>CPU</span>
+              <strong id="cpu-value">72%</strong>
+            </div>
+            <div class="metric-bar"><span id="cpu-bar"></span></div>
+          </div>
+
+          <div class="metric">
+            <div class="metric-label">
+              <span>Memoire</span>
+              <strong id="memory-value">48%</strong>
+            </div>
+            <div class="metric-bar"><span id="memory-bar"></span></div>
+          </div>
+
+          <div class="metric">
+            <div class="metric-label">
+              <span>Reseau</span>
+              <strong id="network-value">91%</strong>
+            </div>
+            <div class="metric-bar"><span id="network-bar"></span></div>
+          </div>
         </div>
       </section>
     </main>
 
-    <section class="console">
-      <input id="command-input" type="text" placeholder="Entrez une commande..." />
-      <button id="send-btn">Envoyer</button>
-      <button id="voice-btn">🎙️</button>
-    </section>
+    <section class="history" aria-labelledby="history-title">
+      <div class="history-header">
+        <div class="panel-heading">
+          <span>04</span>
+          <h2 id="history-title">Historique commandes</h2>
+        </div>
+        <button id="clear-history-btn" type="button">Vider l'historique</button>
+      </div>
 
-    <section class="history">
-      <h2>Historique</h2>
-      <ul id="history-list"></ul>
+      <ol id="history-list" class="history-list"></ol>
     </section>
   </div>
 
