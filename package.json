@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "electron": "^42.1.0",
-    "electron-builder": "^26.9.1"
+    "electron-builder": "^26.0.12"
   },
   "build": {
     "appId": "com.lrdaaxironman.jarvisassistant",
