@@ -1,5 +1,6 @@
 const { contextBridge } = require("electron");
 
+// Pont minimal entre Electron et l'interface, sans exposer Node.js.
 contextBridge.exposeInMainWorld("jarvisDesktop", {
   isDesktop: true,
   platform: process.platform,
