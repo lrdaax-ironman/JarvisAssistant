@@ -56,8 +56,13 @@ function createMainWindow() {
   mainWindow.webContents.on("will-navigate", (event, url) => {
     const currentUrl = mainWindow.webContents.getURL();
 
-    if (url !== currentUrl && isSafeExternalUrl(url)) {
-      event.preventDefault();
+    if (url === currentUrl) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (isSafeExternalUrl(url)) {
       shell.openExternal(url);
     }
   });
