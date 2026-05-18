@@ -1,0 +1,51 @@
+{
+  "name": "jarvis-assistant",
+  "version": "2.0.0",
+  "description": "Application desktop Windows JARVIS Assistant en HTML, CSS et JavaScript vanilla avec Electron.",
+  "main": "main.js",
+  "private": true,
+  "author": "lrdaax-ironman",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^42.1.0",
+    "electron-builder": "^26.9.1"
+  },
+  "build": {
+    "appId": "com.lrdaaxironman.jarvisassistant",
+    "productName": "JARVIS Assistant",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "style.css",
+      "voice.css",
+      "script.js",
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "JARVIS Assistant"
+    }
+  }
+}
