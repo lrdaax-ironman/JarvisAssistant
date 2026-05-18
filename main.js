@@ -4,6 +4,7 @@ const path = require("node:path");
 const APP_TITLE = "JARVIS Assistant";
 
 function configurePermissions() {
+  // Autorise uniquement les permissions media utiles au micro.
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(permission === "media");
   });
@@ -14,6 +15,7 @@ function configurePermissions() {
 }
 
 function isSafeExternalUrl(url) {
+  // Les liens externes partent dans le navigateur Windows, jamais dans JARVIS.
   try {
     const parsedUrl = new URL(url);
     return parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:";
@@ -23,6 +25,7 @@ function isSafeExternalUrl(url) {
 }
 
 function createMainWindow() {
+  // Fenetre desktop securisee : pas de Node.js direct dans l'interface.
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
