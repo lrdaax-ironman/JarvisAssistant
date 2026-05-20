@@ -26,7 +26,28 @@ const speechRate = document.getElementById("speech-rate");
 const speechRateValue = document.getElementById("speech-rate-value");
 const speechPitch = document.getElementById("speech-pitch");
 const speechPitchValue = document.getElementById("speech-pitch-value");
+const speechVolume = document.getElementById("speech-volume");
+const speechVolumeValue = document.getElementById("speech-volume-value");
+const settingsPanel = document.getElementById("settings-panel");
+const settingsStatus = document.getElementById("settings-status");
+const saveSettingsBtn = document.getElementById("save-settings-btn");
+const resetSettingsBtn = document.getElementById("reset-settings-btn");
+const workModeBadge = document.getElementById("work-mode-badge");
 const desktopApi = window.jarvisDesktop || null;
+
+const SETTINGS_STORAGE_KEY = "jarvisAssistant.settings.v2";
+const HISTORY_STORAGE_KEY = "jarvisAssistant.history.v2";
+const HISTORY_LIMIT = 20;
+const DEFAULT_SETTINGS = {
+  voiceName: "",
+  voiceLang: "",
+  speechRate: 1,
+  speechPitch: 0.9,
+  speechVolume: 1,
+  preferences: {
+    workMode: false
+  }
+};
 
 const metricElements = {
   cpu: {
@@ -73,7 +94,13 @@ const availableCommands = [
   "plein ecran",
   "fenetre",
   "minimise",
-  "ferme jarvis"
+  "ferme jarvis",
+  "bonjour jarvis",
+  "routine du matin",
+  "mode travail",
+  "parametres",
+  "sauvegarde",
+  "reset parametres"
 ];
 
 let isListening = false;
@@ -87,7 +114,12 @@ let availableVoices = [];
 let selectedVoiceIndex = 0;
 let currentSpeechRate = 1;
 let currentSpeechPitch = 0.9;
+let currentSpeechVolume = 1;
 let voiceProfileInitialized = false;
+let preferredVoiceName = "";
+let preferredVoiceLang = "";
+let historyEntries = [];
+let isWorkMode = false;
 
 // Normalise les commandes vocales et clavier sans changer les commandes supportees.
 function normalizeCommand(command) {
@@ -97,6 +129,84 @@ function normalizeCommand(command) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ");
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, number));
+}
+
+function readJsonStorage(key, fallback) {
+  try {
+    const storedValue = window.localStorage.getItem(key);
+    return storedValue ? JSON.parse(storedValue) : fallback;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function writeJsonStorage(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function setSettingsStatus(message) {
+  settingsStatus.textContent = message;
+}
+
+function loadStoredSettings() {
+  const storedSettings = readJsonStorage(SETTINGS_STORAGE_KEY, DEFAULT_SETTINGS);
+  const preferences = storedSettings.preferences || {};
+
+  currentSpeechRate = clampNumber(storedSettings.speechRate, 0.7, 1.4, DEFAULT_SETTINGS.speechRate);
+  currentSpeechPitch = clampNumber(storedSettings.speechPitch, 0.6, 1.4, DEFAULT_SETTINGS.speechPitch);
+  currentSpeechVolume = clampNumber(storedSettings.speechVolume, 0, 1, DEFAULT_SETTINGS.speechVolume);
+  preferredVoiceName = typeof storedSettings.voiceName === "string" ? storedSettings.voiceName : "";
+  preferredVoiceLang = typeof storedSettings.voiceLang === "string" ? storedSettings.voiceLang : "";
+  setWorkMode(Boolean(preferences.workMode), false);
+}
+
+function buildSettingsPayload() {
+  const selectedVoice = getSelectedVoice();
+
+  return {
+    voiceName: selectedVoice ? selectedVoice.name : preferredVoiceName,
+    voiceLang: selectedVoice ? selectedVoice.lang : preferredVoiceLang,
+    speechRate: currentSpeechRate,
+    speechPitch: currentSpeechPitch,
+    speechVolume: currentSpeechVolume,
+    preferences: {
+      workMode: isWorkMode
+    }
+  };
+}
+
+function saveSettings(statusMessage = "Reglages sauvegardes") {
+  const saved = writeJsonStorage(SETTINGS_STORAGE_KEY, buildSettingsPayload());
+  setSettingsStatus(saved ? statusMessage : "Sauvegarde indisponible");
+  return saved;
+}
+
+function resetSettingsToDefault(shouldPersist = true) {
+  preferredVoiceName = "";
+  preferredVoiceLang = "";
+  currentSpeechRate = DEFAULT_SETTINGS.speechRate;
+  currentSpeechPitch = DEFAULT_SETTINGS.speechPitch;
+  currentSpeechVolume = DEFAULT_SETTINGS.speechVolume;
+  setDefaultVoiceProfile(false);
+  setWorkMode(false, false);
+  updateVoiceSummary();
+
+  if (shouldPersist) {
+    saveSettings("Reglages reinitialises");
+  } else {
+    setSettingsStatus("Reglages par defaut");
+  }
 }
 
 function getDesktopApi() {
@@ -157,11 +267,13 @@ function updateVoiceSummary() {
   const lang = selectedVoice && selectedVoice.lang ? ` (${selectedVoice.lang})` : "";
 
   voiceName.textContent = name;
-  voiceSettingsSummary.textContent = `Vitesse ${currentSpeechRate.toFixed(2)} / Pitch ${currentSpeechPitch.toFixed(2)}`;
+  voiceSettingsSummary.textContent = `Vitesse ${currentSpeechRate.toFixed(2)} / Pitch ${currentSpeechPitch.toFixed(2)} / Volume ${currentSpeechVolume.toFixed(2)}`;
   speechRateValue.textContent = currentSpeechRate.toFixed(2);
   speechPitchValue.textContent = currentSpeechPitch.toFixed(2);
+  speechVolumeValue.textContent = currentSpeechVolume.toFixed(2);
   speechRate.value = currentSpeechRate;
   speechPitch.value = currentSpeechPitch;
+  speechVolume.value = currentSpeechVolume;
   setVoiceStatus("Repos", `${name}${lang}`);
 }
 
@@ -196,11 +308,15 @@ function loadBrowserVoices() {
 
   availableVoices = window.speechSynthesis.getVoices();
   const defaultIndex = availableVoices.findIndex((voice) => voice.default);
+  const preferredIndex = availableVoices.findIndex((voice) => {
+    return voice.name === preferredVoiceName && (!preferredVoiceLang || voice.lang === preferredVoiceLang);
+  });
+
   if (!voiceProfileInitialized) {
-    selectedVoiceIndex = defaultIndex >= 0 ? defaultIndex : 0;
+    selectedVoiceIndex = preferredIndex >= 0 ? preferredIndex : defaultIndex >= 0 ? defaultIndex : 0;
     voiceProfileInitialized = true;
   } else if (selectedVoiceIndex >= availableVoices.length) {
-    selectedVoiceIndex = defaultIndex >= 0 ? defaultIndex : 0;
+    selectedVoiceIndex = preferredIndex >= 0 ? preferredIndex : defaultIndex >= 0 ? defaultIndex : 0;
   }
   populateVoiceSelect();
 }
@@ -215,16 +331,23 @@ function changeVoice(step = 1) {
   updateVoiceSummary();
 
   const selectedVoice = getSelectedVoice();
+  preferredVoiceName = selectedVoice.name;
+  preferredVoiceLang = selectedVoice.lang || "";
   return `Je m'en occupe. Nouvelle voix active : ${selectedVoice.name}.`;
 }
 
-function setDefaultVoiceProfile() {
+function setDefaultVoiceProfile(shouldPersist = true) {
   const defaultIndex = availableVoices.findIndex((voice) => voice.default);
   selectedVoiceIndex = defaultIndex >= 0 ? defaultIndex : 0;
   currentSpeechRate = 1;
   currentSpeechPitch = 0.9;
+  currentSpeechVolume = 1;
+  const selectedVoice = getSelectedVoice();
+  preferredVoiceName = selectedVoice ? selectedVoice.name : "";
+  preferredVoiceLang = selectedVoice ? selectedVoice.lang || "" : "";
   voiceSelect.value = availableVoices.length ? String(selectedVoiceIndex) : "";
   updateVoiceSummary();
+  if (shouldPersist) saveSettings("Profil vocal sauvegarde");
 }
 
 function changeSpeechRate(delta) {
@@ -276,7 +399,11 @@ function setListening(active) {
     setVoiceStatus("Ecoute", "Micro actif");
   } else {
     coreLabel.textContent = core.classList.contains("is-speaking") ? "TALK" : "ONLINE";
-    setSystemStatus("Systeme en ligne", "Noyau stable");
+    if (isWorkMode) {
+      setSystemStatus("Mode travail active", "Animations reduites");
+    } else {
+      setSystemStatus("Systeme en ligne", "Noyau stable");
+    }
     if (!core.classList.contains("is-speaking")) {
       setVoiceStatus("Repos", "Micro inactif");
     }
@@ -307,6 +434,7 @@ function speak(text) {
   utterance.lang = "fr-FR";
   utterance.rate = currentSpeechRate;
   utterance.pitch = currentSpeechPitch;
+  utterance.volume = currentSpeechVolume;
 
   const selectedVoice = getSelectedVoice();
   if (selectedVoice) {
@@ -332,13 +460,8 @@ function respond(message, shouldSpeak = true) {
   if (shouldSpeak) speak(message);
 }
 
-function addHistory(command, response) {
+function createHistoryItem(entry) {
   const item = document.createElement("li");
-  const time = new Date().toLocaleTimeString("fr-FR", {
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-
   const timeElement = document.createElement("span");
   const contentElement = document.createElement("div");
   const commandElement = document.createElement("div");
@@ -349,21 +472,56 @@ function addHistory(command, response) {
   commandElement.className = "history-command";
   responseElement.className = "history-response";
 
-  timeElement.textContent = time;
-  commandElement.textContent = `> ${command}`;
-  responseElement.textContent = response;
+  timeElement.textContent = entry.time;
+  commandElement.textContent = `> ${entry.command}`;
+  responseElement.textContent = entry.response;
 
   contentElement.append(commandElement, responseElement);
   item.append(timeElement, contentElement);
-  historyList.prepend(item);
+  return item;
+}
 
-  if (historyList.children.length > 16) {
-    historyList.removeChild(historyList.lastChild);
+function renderHistory() {
+  historyList.innerHTML = "";
+  historyEntries.forEach((entry) => {
+    historyList.append(createHistoryItem(entry));
+  });
+}
+
+function saveHistory() {
+  writeJsonStorage(HISTORY_STORAGE_KEY, historyEntries.slice(0, HISTORY_LIMIT));
+}
+
+function loadStoredHistory() {
+  const storedHistory = readJsonStorage(HISTORY_STORAGE_KEY, []);
+  historyEntries = Array.isArray(storedHistory)
+    ? storedHistory
+        .filter((entry) => entry && typeof entry.command === "string" && typeof entry.response === "string")
+        .slice(0, HISTORY_LIMIT)
+    : [];
+  renderHistory();
+}
+
+function addHistory(command, response) {
+  const time = new Date().toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
+  historyEntries.unshift({ command, response, time });
+
+  if (historyEntries.length > HISTORY_LIMIT) {
+    historyEntries = historyEntries.slice(0, HISTORY_LIMIT);
   }
+
+  renderHistory();
+  saveHistory();
 }
 
 function clearHistory() {
+  historyEntries = [];
   historyList.innerHTML = "";
+  saveHistory();
 }
 
 // Les cartes dashboard restent locales et ne dependent d'aucune API externe.
@@ -425,6 +583,43 @@ function startFocusTimer() {
   setSystemStatus("Mode focus actif", "Minuteur 25 minutes");
 }
 
+function setWorkMode(active, shouldPersist = true) {
+  isWorkMode = active;
+  app.classList.toggle("is-work-mode", active);
+  workModeBadge.hidden = !active;
+
+  if (active) {
+    setSystemStatus("Mode travail active", "Animations reduites");
+  }
+
+  if (shouldPersist) {
+    saveSettings(active ? "Mode travail sauvegarde" : "Mode standard sauvegarde");
+  }
+}
+
+function revealSettingsPanel() {
+  settingsPanel.classList.add("is-highlighted");
+  settingsPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  setSettingsStatus("Panneau parametres affiche");
+  window.setTimeout(() => settingsPanel.classList.remove("is-highlighted"), 1800);
+}
+
+function buildMorningRoutine() {
+  const now = new Date();
+  const time = now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const date = now.toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  });
+  const suggestion = isWorkMode
+    ? "Suggestion : gardez le mode travail actif et lancez focus pour une session de concentration."
+    : "Suggestion : commencez par vos priorites, puis lancez mode travail ou focus si vous voulez une session concentree.";
+
+  return `Routine du matin : il est ${time}. Nous sommes le ${date}. Statut systeme : ${systemState.textContent}. ${suggestion}`;
+}
+
 function stopFocusTimer(resetCard = true) {
   if (focusInterval) {
     window.clearInterval(focusInterval);
@@ -476,6 +671,22 @@ async function handleCommand(command) {
     return;
   } else if (cleanCommand === "presentation") {
     message = "Bien recu monsieur. Je suis JARVIS, votre assistant personnel. Je peux afficher l'heure, ouvrir des outils Windows, lancer une analyse locale, rester en veille, demarrer un focus de 25 minutes, gerer ma voix et tenir l'historique des commandes.";
+  } else if (cleanCommand === "bonjour jarvis") {
+    message = "Bonjour monsieur. Tous les systemes sont operationnels.";
+  } else if (cleanCommand === "routine du matin") {
+    message = buildMorningRoutine();
+  } else if (cleanCommand === "mode travail") {
+    setWorkMode(true);
+    message = "Mode travail active. Je reduis les animations et je peux lancer un minuteur de concentration avec la commande focus.";
+  } else if (cleanCommand === "parametres") {
+    revealSettingsPanel();
+    message = "Je m'en occupe. Panneau parametres affiche.";
+  } else if (cleanCommand === "sauvegarde") {
+    const saved = saveSettings("Reglages sauvegardes manuellement");
+    message = saved ? "Commande executee. Reglages sauvegardes localement." : "Sauvegarde impossible pour le moment.";
+  } else if (cleanCommand === "reset parametres") {
+    resetSettingsToDefault(true);
+    message = "Commande executee. Parametres voix et interface remis par defaut.";
   } else if (cleanCommand === "statut") {
     message = `Bien recu monsieur. ${buildStatusReport()}`;
   } else if (cleanCommand === "veille") {
@@ -568,7 +779,8 @@ async function handleCommand(command) {
 function buildStatusReport() {
   const focusText = focusInterval ? `focus actif (${focusState.textContent} restantes)` : "focus inactif";
   const desktopText = getDesktopApi() ? "desktop Electron actif" : "mode navigateur";
-  return `Statut complet : ${systemState.textContent}. Vocal : ${voiceState.textContent}. ${desktopText}. CPU ${metricElements.cpu.value.textContent}, memoire ${metricElements.memory.value.textContent}, reseau ${metricElements.network.value.textContent}. ${focusText}. Historique : ${historyList.children.length} entree(s).`;
+  const workModeText = isWorkMode ? "mode travail actif" : "mode travail inactif";
+  return `Statut complet : ${systemState.textContent}. Vocal : ${voiceState.textContent}. ${desktopText}. ${workModeText}. CPU ${metricElements.cpu.value.textContent}, memoire ${metricElements.memory.value.textContent}, reseau ${metricElements.network.value.textContent}. ${focusText}. Historique : ${historyEntries.length} entree(s).`;
 }
 
 // Simulation volontairement locale pour garder le projet ouvrable en simple fichier HTML.
@@ -639,6 +851,7 @@ function resetInterface() {
   clearHistory();
   input.value = "";
   setDefaultVoiceProfile();
+  setWorkMode(false);
   coreLabel.textContent = "ONLINE";
   setListening(false);
   setResponding(false);
@@ -771,7 +984,11 @@ voiceBtn.addEventListener("click", toggleMicrophone);
 voiceSelect.addEventListener("change", () => {
   const nextIndex = Number(voiceSelect.value);
   selectedVoiceIndex = Number.isFinite(nextIndex) ? nextIndex : 0;
+  const selectedVoice = getSelectedVoice();
+  preferredVoiceName = selectedVoice ? selectedVoice.name : "";
+  preferredVoiceLang = selectedVoice ? selectedVoice.lang || "" : "";
   updateVoiceSummary();
+  saveSettings("Voix sauvegardee");
   respond("Bien recu monsieur. Voix mise a jour.");
 });
 
@@ -781,6 +998,7 @@ speechRate.addEventListener("input", () => {
 });
 
 speechRate.addEventListener("change", () => {
+  saveSettings("Vitesse sauvegardee");
   respond(`Commande executee. Vitesse de parole reglee sur ${currentSpeechRate.toFixed(2)}.`);
 });
 
@@ -790,13 +1008,38 @@ speechPitch.addEventListener("input", () => {
 });
 
 speechPitch.addEventListener("change", () => {
+  saveSettings("Pitch sauvegarde");
   respond(`Commande executee. Pitch vocal regle sur ${currentSpeechPitch.toFixed(2)}.`);
 });
 
+speechVolume.addEventListener("input", () => {
+  currentSpeechVolume = Number(speechVolume.value);
+  updateVoiceSummary();
+});
+
+speechVolume.addEventListener("change", () => {
+  saveSettings("Volume sauvegarde");
+  respond(`Commande executee. Volume vocal regle sur ${currentSpeechVolume.toFixed(2)}.`);
+});
+
+saveSettingsBtn.addEventListener("click", () => {
+  const saved = saveSettings("Reglages sauvegardes manuellement");
+  respond(saved ? "Commande executee. Reglages sauvegardes localement." : "Sauvegarde impossible.", false);
+});
+
+resetSettingsBtn.addEventListener("click", () => {
+  resetSettingsToDefault(true);
+  respond("Commande executee. Parametres remis par defaut.");
+});
+
+loadStoredSettings();
+loadStoredHistory();
 updateClock();
 updateMetrics();
 loadBrowserVoices();
-setSystemStatus("Systeme en ligne", "Noyau stable");
+if (!isWorkMode) {
+  setSystemStatus("Systeme en ligne", "Noyau stable");
+}
 updateVoiceSummary();
 updateFocusCard();
 initWelcomeSequence();
