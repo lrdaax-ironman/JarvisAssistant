@@ -1,6 +1,6 @@
 {
   "name": "jarvis-assistant",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Application desktop Windows JARVIS Assistant en HTML, CSS et JavaScript vanilla avec Electron.",
   "main": "main.js",
   "private": true,
