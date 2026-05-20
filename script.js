@@ -26,6 +26,7 @@ const speechRate = document.getElementById("speech-rate");
 const speechRateValue = document.getElementById("speech-rate-value");
 const speechPitch = document.getElementById("speech-pitch");
 const speechPitchValue = document.getElementById("speech-pitch-value");
+const desktopApi = window.jarvisDesktop || null;
 
 const metricElements = {
   cpu: {
@@ -63,10 +64,20 @@ const availableCommands = [
   "plus lentement",
   "plus vite",
   "voix grave",
-  "voix normale"
+  "voix normale",
+  "ouvre calculatrice",
+  "ouvre navigateur",
+  "ouvre documents",
+  "ouvre bureau",
+  "infos systeme",
+  "plein ecran",
+  "fenetre",
+  "minimise",
+  "ferme jarvis"
 ];
 
 let isListening = false;
+let activeRecognition = null;
 let speechToken = 0;
 let analysisTimers = [];
 let veilleTimers = [];
@@ -86,6 +97,38 @@ function normalizeCommand(command) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ");
+}
+
+function getDesktopApi() {
+  return desktopApi && desktopApi.isDesktop ? desktopApi : null;
+}
+
+async function runDesktopAction(methodName, successMessage, ...args) {
+  const desktop = getDesktopApi();
+
+  if (!desktop || typeof desktop[methodName] !== "function") {
+    return "Module desktop indisponible. Lancez JARVIS avec npm start pour utiliser cette commande.";
+  }
+
+  try {
+    const result = await desktop[methodName](...args);
+
+    if (result && result.ok === false) {
+      return `Action desktop impossible : ${result.message || "operation refusee"}.`;
+    }
+
+    return successMessage;
+  } catch (error) {
+    return `Action desktop impossible : ${error.message || "erreur inconnue"}.`;
+  }
+}
+
+function formatSystemInfo(info) {
+  if (!info || info.ok === false) {
+    return "Impossible de lire les informations systeme pour le moment.";
+  }
+
+  return `Infos systeme : ${info.platform} ${info.release}, architecture ${info.arch}, machine ${info.hostname}. CPU : ${info.cpuCount} coeur(s), ${info.cpuModel}. Memoire : ${info.freeMemoryGb} Go libres sur ${info.totalMemoryGb} Go. Electron ${info.electron}, Chrome ${info.chrome}.`;
 }
 
 function formatSystemLabel(label) {
@@ -402,7 +445,7 @@ function commandListMessage() {
   return `Commandes disponibles : ${availableCommands.join(", ")}.`;
 }
 
-function handleCommand(command) {
+async function handleCommand(command) {
   const cleanCommand = normalizeCommand(command);
 
   if (!cleanCommand) return;
@@ -432,7 +475,7 @@ function handleCommand(command) {
     input.value = "";
     return;
   } else if (cleanCommand === "presentation") {
-    message = "Bien recu monsieur. Je suis JARVIS, votre assistant personnel. Je peux afficher l'heure, la date, ouvrir Google, lancer une analyse locale, rester en veille, demarrer un focus de 25 minutes, gerer ma voix et tenir l'historique des commandes.";
+    message = "Bien recu monsieur. Je suis JARVIS, votre assistant personnel. Je peux afficher l'heure, ouvrir des outils Windows, lancer une analyse locale, rester en veille, demarrer un focus de 25 minutes, gerer ma voix et tenir l'historique des commandes.";
   } else if (cleanCommand === "statut") {
     message = `Bien recu monsieur. ${buildStatusReport()}`;
   } else if (cleanCommand === "veille") {
@@ -476,6 +519,43 @@ function handleCommand(command) {
   } else if (cleanCommand === "voix normale") {
     setDefaultVoiceProfile();
     message = "Commande executee. Voix, vitesse et pitch remis au profil par defaut.";
+  } else if (cleanCommand === "ouvre calculatrice") {
+    message = await runDesktopAction("openCalculator", "Je m'en occupe. Ouverture de la calculatrice Windows.");
+  } else if (cleanCommand === "ouvre navigateur") {
+    message = await runDesktopAction("openBrowser", "Je m'en occupe. Ouverture du navigateur par defaut.");
+  } else if (cleanCommand === "ouvre documents") {
+    message = await runDesktopAction("openFolder", "Je m'en occupe. Ouverture du dossier Documents.", "documents");
+  } else if (cleanCommand === "ouvre bureau") {
+    message = await runDesktopAction("openFolder", "Je m'en occupe. Ouverture du Bureau Windows.", "desktop");
+  } else if (cleanCommand === "infos systeme") {
+    const desktop = getDesktopApi();
+    if (!desktop || typeof desktop.getSystemInfo !== "function") {
+      message = "Module desktop indisponible. Lancez JARVIS avec npm start pour lire les informations systeme.";
+    } else {
+      try {
+        message = `Bien recu monsieur. ${formatSystemInfo(await desktop.getSystemInfo())}`;
+      } catch (error) {
+        message = `Impossible de lire les informations systeme : ${error.message || "erreur inconnue"}.`;
+      }
+    }
+  } else if (cleanCommand === "plein ecran") {
+    message = await runDesktopAction("setFullScreen", "Commande executee. Passage en plein ecran.", true);
+  } else if (cleanCommand === "fenetre") {
+    message = await runDesktopAction("setFullScreen", "Commande executee. Retour en mode fenetre.", false);
+  } else if (cleanCommand === "minimise") {
+    message = await runDesktopAction("minimize", "Commande executee. Fenetre minimisee.");
+  } else if (cleanCommand === "ferme jarvis") {
+    const desktop = getDesktopApi();
+    if (!desktop || typeof desktop.closeApp !== "function") {
+      message = "Module desktop indisponible. Fermeture disponible uniquement avec npm start.";
+    } else {
+      message = "Bien recu monsieur. Fermeture de JARVIS.";
+      respond(message);
+      addHistory(cleanCommand, message);
+      input.value = "";
+      window.setTimeout(() => desktop.closeApp(), 900);
+      return;
+    }
   } else {
     message = `Commande "${cleanCommand}" non reconnue. Essayez "aide" pour voir les commandes, ou utilisez "presentation" pour decouvrir mes capacites.`;
   }
@@ -487,7 +567,8 @@ function handleCommand(command) {
 
 function buildStatusReport() {
   const focusText = focusInterval ? `focus actif (${focusState.textContent} restantes)` : "focus inactif";
-  return `Statut complet : ${systemState.textContent}. Vocal : ${voiceState.textContent}. CPU ${metricElements.cpu.value.textContent}, memoire ${metricElements.memory.value.textContent}, reseau ${metricElements.network.value.textContent}. ${focusText}. Historique : ${historyList.children.length} entree(s).`;
+  const desktopText = getDesktopApi() ? "desktop Electron actif" : "mode navigateur";
+  return `Statut complet : ${systemState.textContent}. Vocal : ${voiceState.textContent}. ${desktopText}. CPU ${metricElements.cpu.value.textContent}, memoire ${metricElements.memory.value.textContent}, reseau ${metricElements.network.value.textContent}. ${focusText}. Historique : ${historyList.children.length} entree(s).`;
 }
 
 // Simulation volontairement locale pour garder le projet ouvrable en simple fichier HTML.
@@ -587,6 +668,63 @@ function initWelcomeSequence() {
   }, 2600);
 }
 
+function startVoiceRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    respond("La reconnaissance vocale n'est pas disponible sur ce navigateur.");
+    return;
+  }
+
+  if (activeRecognition) {
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  activeRecognition = recognition;
+  recognition.lang = "fr-FR";
+  recognition.interimResults = false;
+
+  recognition.onresult = (event) => {
+    const command = event.results[0][0].transcript;
+    input.value = command;
+    handleCommand(command);
+  };
+
+  recognition.onerror = () => {
+    respond("Je n'ai pas compris la commande vocale. Essayez une commande courte, comme aide, statut ou focus.");
+  };
+
+  recognition.onend = () => {
+    if (activeRecognition === recognition) {
+      activeRecognition = null;
+    }
+    setListening(false);
+  };
+
+  try {
+    setListening(true);
+    recognition.start();
+  } catch (error) {
+    activeRecognition = null;
+    setListening(false);
+    respond(`Micro indisponible : ${error.message || "demarrage impossible"}.`);
+  }
+}
+
+function toggleMicrophone() {
+  if (activeRecognition) {
+    const recognition = activeRecognition;
+    activeRecognition = null;
+    setListening(false);
+    recognition.stop();
+    respond("Micro desactive.", false);
+    return;
+  }
+
+  startVoiceRecognition();
+}
+
 sendBtn.addEventListener("click", () => {
   handleCommand(input.value);
 });
@@ -594,6 +732,24 @@ sendBtn.addEventListener("click", () => {
 input.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     handleCommand(input.value);
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (!event.ctrlKey || event.altKey || event.metaKey) {
+    return;
+  }
+
+  const key = event.key.toLowerCase();
+
+  if (key === "j") {
+    event.preventDefault();
+    input.focus();
+    input.select();
+    respond("Canal de commande focalise.", false);
+  } else if (key === "m") {
+    event.preventDefault();
+    toggleMicrophone();
   }
 });
 
@@ -610,35 +766,7 @@ document.querySelectorAll("[data-command]").forEach((button) => {
   });
 });
 
-voiceBtn.addEventListener("click", () => {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-  if (!SpeechRecognition) {
-    respond("La reconnaissance vocale n'est pas disponible sur ce navigateur.");
-    return;
-  }
-
-  const recognition = new SpeechRecognition();
-  recognition.lang = "fr-FR";
-  recognition.interimResults = false;
-
-  setListening(true);
-  recognition.start();
-
-  recognition.onresult = (event) => {
-    const command = event.results[0][0].transcript;
-    input.value = command;
-    handleCommand(command);
-  };
-
-  recognition.onerror = () => {
-    respond("Je n'ai pas compris la commande vocale. Essayez une commande courte, comme aide, statut ou focus.");
-  };
-
-  recognition.onend = () => {
-    setListening(false);
-  };
-});
+voiceBtn.addEventListener("click", toggleMicrophone);
 
 voiceSelect.addEventListener("change", () => {
   const nextIndex = Number(voiceSelect.value);
