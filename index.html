@@ -22,9 +22,12 @@
         <p>Assistant personnel intelligent</p>
       </div>
 
-      <div class="status-pill" aria-live="polite">
-        <span class="status-dot"></span>
-        <span id="status">Systeme en ligne</span>
+      <div class="header-status">
+        <span id="work-mode-badge" class="mode-badge" hidden>MODE TRAVAIL</span>
+        <div class="status-pill" aria-live="polite">
+          <span class="status-dot"></span>
+          <span id="status">Systeme en ligne</span>
+        </div>
       </div>
     </header>
 
@@ -63,6 +66,12 @@
           <li><button type="button" data-command="fenetre">fenetre</button></li>
           <li><button type="button" data-command="minimise">minimise</button></li>
           <li><button type="button" data-command="ferme jarvis">ferme jarvis</button></li>
+          <li><button type="button" data-command="bonjour jarvis">bonjour jarvis</button></li>
+          <li><button type="button" data-command="routine du matin">routine du matin</button></li>
+          <li><button type="button" data-command="mode travail">mode travail</button></li>
+          <li><button type="button" data-command="parametres">parametres</button></li>
+          <li><button type="button" data-command="sauvegarde">sauvegarde</button></li>
+          <li><button type="button" data-command="reset parametres">reset parametres</button></li>
         </ul>
       </section>
 
@@ -143,27 +152,6 @@
           </article>
         </div>
 
-        <div class="voice-controls" aria-label="Reglages vocaux">
-          <label for="voice-select">
-            Voix
-            <select id="voice-select">
-              <option value="">Chargement des voix...</option>
-            </select>
-          </label>
-
-          <label for="speech-rate">
-            Vitesse
-            <input id="speech-rate" type="range" min="0.7" max="1.4" step="0.05" value="1" />
-            <span id="speech-rate-value">1.00</span>
-          </label>
-
-          <label for="speech-pitch">
-            Pitch
-            <input id="speech-pitch" type="range" min="0.6" max="1.4" step="0.05" value="0.9" />
-            <span id="speech-pitch-value">0.90</span>
-          </label>
-        </div>
-
         <div class="metrics">
           <div class="metric">
             <div class="metric-label">
@@ -192,10 +180,52 @@
       </section>
     </main>
 
+    <section id="settings-panel" class="panel settings-panel" aria-labelledby="settings-title">
+      <div class="settings-header">
+        <div class="panel-heading">
+          <span>04</span>
+          <h2 id="settings-title">Parametres</h2>
+        </div>
+        <small id="settings-status" class="settings-status">Reglages prets</small>
+      </div>
+
+      <div class="voice-controls" aria-label="Parametres vocaux et interface">
+        <label for="voice-select">
+          Voix
+          <select id="voice-select">
+            <option value="">Chargement des voix...</option>
+          </select>
+        </label>
+
+        <label for="speech-rate">
+          Vitesse
+          <input id="speech-rate" type="range" min="0.7" max="1.4" step="0.05" value="1" />
+          <span id="speech-rate-value">1.00</span>
+        </label>
+
+        <label for="speech-pitch">
+          Pitch
+          <input id="speech-pitch" type="range" min="0.6" max="1.4" step="0.05" value="0.9" />
+          <span id="speech-pitch-value">0.90</span>
+        </label>
+
+        <label for="speech-volume">
+          Volume
+          <input id="speech-volume" type="range" min="0" max="1" step="0.05" value="1" />
+          <span id="speech-volume-value">1.00</span>
+        </label>
+
+        <div class="settings-actions">
+          <button id="save-settings-btn" type="button">Sauvegarder</button>
+          <button id="reset-settings-btn" type="button">Reinitialiser</button>
+        </div>
+      </div>
+    </section>
+
     <section class="history" aria-labelledby="history-title">
       <div class="history-header">
         <div class="panel-heading">
-          <span>04</span>
+          <span>05</span>
           <h2 id="history-title">Historique commandes</h2>
         </div>
         <button id="clear-history-btn" type="button">Vider l'historique</button>
