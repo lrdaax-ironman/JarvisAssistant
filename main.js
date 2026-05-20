@@ -87,6 +87,15 @@ function registerDesktopIpcHandlers() {
     return { ok: true };
   });
 
+  ipcMain.handle("jarvis:open-url", async (_event, url) => {
+    if (!isSafeExternalUrl(url)) {
+      return { ok: false, message: "URL non autorisee." };
+    }
+
+    await shell.openExternal(url);
+    return { ok: true };
+  });
+
   ipcMain.handle("jarvis:open-folder", (_event, folderKey) => openSystemFolder(folderKey));
   ipcMain.handle("jarvis:get-system-info", () => getSimpleSystemInfo());
 
