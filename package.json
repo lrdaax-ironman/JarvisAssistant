@@ -1,14 +1,14 @@
 {
   "name": "jarvis-assistant",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Application desktop Windows JARVIS Assistant en HTML, CSS et JavaScript vanilla avec Electron.",
   "main": "main.js",
   "private": true,
   "author": "lrdaax-ironman",
   "license": "MIT",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder --win nsis"
+    "start": "\"%npm_node_execpath%\" ./node_modules/electron/cli.js .",
+    "build": "\"%npm_node_execpath%\" ./scripts/build-windows.js"
   },
   "devDependencies": {
     "electron": "^42.1.0",
