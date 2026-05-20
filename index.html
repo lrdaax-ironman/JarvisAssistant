@@ -24,6 +24,7 @@
 
       <div class="header-status">
         <span id="work-mode-badge" class="mode-badge" hidden>MODE TRAVAIL</span>
+        <span id="active-module-badge" class="mode-badge module-active-badge" hidden>MODULE ACCUEIL</span>
         <div class="status-pill" aria-live="polite">
           <span class="status-dot"></span>
           <span id="status">Systeme en ligne</span>
@@ -72,6 +73,31 @@
           <li><button type="button" data-command="parametres">parametres</button></li>
           <li><button type="button" data-command="sauvegarde">sauvegarde</button></li>
           <li><button type="button" data-command="reset parametres">reset parametres</button></li>
+          <li><button type="button" data-command="modules">modules</button></li>
+          <li><button type="button" data-command="accueil">accueil</button></li>
+          <li><button type="button" data-command="module travail">module travail</button></li>
+          <li><button type="button" data-command="routine travail">routine travail</button></li>
+          <li><button type="button" data-command="ouvrir outils travail">ouvrir outils travail</button></li>
+          <li><button type="button" data-command="module sport">module sport</button></li>
+          <li><button type="button" data-command="seance du jour">seance du jour</button></li>
+          <li><button type="button" data-command="timer repos">timer repos</button></li>
+          <li><button type="button" data-command="objectif physique">objectif physique</button></li>
+          <li><button type="button" data-command="module veille">module veille</button></li>
+          <li><button type="button" data-command="idee linkedin">idee linkedin</button></li>
+          <li><button type="button" data-command="tendance du jour">tendance du jour</button></li>
+          <li><button type="button" data-command="module finance">module finance</button></li>
+          <li><button type="button" data-command="budget">budget</button></li>
+          <li><button type="button" data-command="epargne">epargne</button></li>
+          <li><button type="button" data-command="investissement">investissement</button></li>
+          <li><button type="button" data-command="module routines">module routines</button></li>
+          <li><button type="button" data-command="routine soir">routine soir</button></li>
+          <li><button type="button" data-command="check journee">check journee</button></li>
+          <li><button type="button" data-command="mode focus">mode focus</button></li>
+          <li><button type="button" data-command="module apps">module apps</button></li>
+          <li><button type="button" data-command="ouvrir google">ouvrir google</button></li>
+          <li><button type="button" data-command="ouvrir youtube">ouvrir youtube</button></li>
+          <li><button type="button" data-command="ouvrir github">ouvrir github</button></li>
+          <li><button type="button" data-command="ouvrir calendrier">ouvrir calendrier</button></li>
         </ul>
       </section>
 
@@ -180,10 +206,100 @@
       </section>
     </main>
 
+    <section id="modules-panel" class="panel modules-panel" aria-labelledby="modules-title">
+      <div class="modules-header">
+        <div class="panel-heading">
+          <span>04</span>
+          <h2 id="modules-title">Modules personnels</h2>
+        </div>
+        <small id="module-summary" class="module-summary">Accueil actif</small>
+      </div>
+
+      <div class="module-grid">
+        <article id="module-card-work" class="module-card" data-module-card="work">
+          <div class="module-card-header">
+            <span>Module</span>
+            <strong>Travail</strong>
+          </div>
+          <p>Priorites, focus, environnement et outils utiles.</p>
+          <small id="module-work-status">Pret</small>
+          <div class="module-actions">
+            <button type="button" data-command="module travail">Activer</button>
+            <button type="button" data-command="ouvrir outils travail">Outils</button>
+          </div>
+        </article>
+
+        <article id="module-card-sport" class="module-card" data-module-card="sport">
+          <div class="module-card-header">
+            <span>Module</span>
+            <strong>Sport</strong>
+          </div>
+          <p>Seance du jour, repos, hydratation et progression.</p>
+          <small id="module-sport-status">Pret</small>
+          <div class="module-actions">
+            <button type="button" data-command="module sport">Activer</button>
+            <button type="button" data-command="timer repos">Repos</button>
+          </div>
+        </article>
+
+        <article id="module-card-watch" class="module-card" data-module-card="watch">
+          <div class="module-card-header">
+            <span>Module</span>
+            <strong>Veille IA</strong>
+          </div>
+          <p>Idees IA, digital, automatisation et piste LinkedIn.</p>
+          <small id="module-watch-status">Pret</small>
+          <div class="module-actions">
+            <button type="button" data-command="module veille">Activer</button>
+            <button type="button" data-command="idee linkedin">LinkedIn</button>
+          </div>
+        </article>
+
+        <article id="module-card-finance" class="module-card" data-module-card="finance">
+          <div class="module-card-header">
+            <span>Module</span>
+            <strong>Finance</strong>
+          </div>
+          <p>Budget, epargne, investissements et suivi personnel.</p>
+          <small id="module-finance-status">Pret</small>
+          <div class="module-actions">
+            <button type="button" data-command="module finance">Activer</button>
+            <button type="button" data-command="budget">Budget</button>
+          </div>
+        </article>
+
+        <article id="module-card-routines" class="module-card" data-module-card="routines">
+          <div class="module-card-header">
+            <span>Module</span>
+            <strong>Routines</strong>
+          </div>
+          <p>Matin, soir, check journee et concentration.</p>
+          <small id="module-routines-status">Pret</small>
+          <div class="module-actions">
+            <button type="button" data-command="module routines">Activer</button>
+            <button type="button" data-command="routine soir">Soir</button>
+          </div>
+        </article>
+
+        <article id="module-card-apps" class="module-card" data-module-card="apps">
+          <div class="module-card-header">
+            <span>Module</span>
+            <strong>Apps rapides</strong>
+          </div>
+          <p>Google, YouTube, GitHub, calendrier, documents et bureau.</p>
+          <small id="module-apps-status">Pret</small>
+          <div class="module-actions">
+            <button type="button" data-command="module apps">Activer</button>
+            <button type="button" data-command="ouvrir github">GitHub</button>
+          </div>
+        </article>
+      </div>
+    </section>
+
     <section id="settings-panel" class="panel settings-panel" aria-labelledby="settings-title">
       <div class="settings-header">
         <div class="panel-heading">
-          <span>04</span>
+          <span>05</span>
           <h2 id="settings-title">Parametres</h2>
         </div>
         <small id="settings-status" class="settings-status">Reglages prets</small>
@@ -225,7 +341,7 @@
     <section class="history" aria-labelledby="history-title">
       <div class="history-header">
         <div class="panel-heading">
-          <span>05</span>
+          <span>06</span>
           <h2 id="history-title">Historique commandes</h2>
         </div>
         <button id="clear-history-btn" type="button">Vider l'historique</button>
