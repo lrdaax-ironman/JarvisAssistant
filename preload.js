@@ -12,6 +12,18 @@ contextBridge.exposeInMainWorld("jarvisDesktop", {
   },
   openCalculator: () => ipcRenderer.invoke("jarvis:open-calculator"),
   openBrowser: () => ipcRenderer.invoke("jarvis:open-browser"),
+  openUrl: (url) => {
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+        return Promise.resolve({ ok: false, message: "URL non autorisee." });
+      }
+
+      return ipcRenderer.invoke("jarvis:open-url", parsedUrl.toString());
+    } catch (_error) {
+      return Promise.resolve({ ok: false, message: "URL invalide." });
+    }
+  },
   openFolder: (folderKey) => {
     if (!allowedFolders.includes(folderKey)) {
       return Promise.resolve({ ok: false, message: "Dossier non autorise." });
