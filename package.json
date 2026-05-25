@@ -1,6 +1,6 @@
 {
   "name": "jarvis-assistant",
-  "version": "2.3.0",
+  "version": "3.0.0",
   "description": "Application desktop Windows JARVIS Assistant en HTML, CSS et JavaScript vanilla avec Electron.",
   "main": "main.js",
   "private": true,
@@ -9,6 +9,10 @@
   "scripts": {
     "start": "\"%npm_node_execpath%\" ./node_modules/electron/cli.js .",
     "build": "\"%npm_node_execpath%\" ./scripts/build-windows.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "openai": "^6.9.1"
   },
   "devDependencies": {
     "electron": "^42.1.0",
