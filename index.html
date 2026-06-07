@@ -3,7 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#00d9ff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="JARVIS" />
   <title>JARVIS Assistant</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="voice.css" />
 </head>
@@ -14,30 +20,85 @@
     <strong id="welcome-message">Connexion au noyau principal...</strong>
   </div>
 
-  <div id="app" class="app">
-    <header class="header">
-      <div class="brand">
-        <span class="eyebrow">Interface HUD active</span>
-        <h1>J.A.R.V.I.S</h1>
-        <p>Assistant personnel intelligent</p>
+  <div id="app" class="app app-shell">
+    <header class="header app-header">
+      <div class="brand app-brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span>
+        </div>
+        <div>
+          <h1>JARVIS Assistant</h1>
+          <p>VOTRE ASSISTANT INTELLIGENT</p>
+        </div>
       </div>
 
-      <div class="header-status">
-        <span id="work-mode-badge" class="mode-badge" hidden>MODE TRAVAIL</span>
-        <span id="active-module-badge" class="mode-badge module-active-badge" hidden>MODULE ACCUEIL</span>
+      <div class="header-status app-header-center">
+        <span class="mode-badge cockpit-mode">MODE STANDARD</span>
         <div class="status-pill" aria-live="polite">
           <span class="status-dot"></span>
           <span id="status">Systeme en ligne</span>
         </div>
+        <span id="work-mode-badge" class="mode-badge" hidden>MODE TRAVAIL</span>
+        <span id="active-module-badge" class="mode-badge module-active-badge" hidden>MODULE ACCUEIL</span>
+        <span id="ai-mode-badge" class="mode-badge ai-mode-badge">IA LOCALE : OLLAMA</span>
+        <span id="memory-mode-badge" class="mode-badge memory-mode-badge">MEMOIRE LOCALE ACTIVE</span>
+        <span id="organization-mode-badge" class="mode-badge organization-mode-badge">ORGANISATION ACTIVE</span>
+        <span id="briefing-mode-badge" class="mode-badge briefing-mode-badge">BRIEFING ACTIF</span>
+        <span id="analytics-mode-badge" class="mode-badge analytics-mode-badge">ANALYTICS LOCAUX</span>
+        <span id="automation-mode-badge" class="mode-badge automation-mode-badge">AUTOMATISATIONS ACTIVES</span>
+        <span id="mobile-mode-badge" class="mode-badge mobile-mode-badge" hidden>MODE MOBILE</span>
+      </div>
+
+      <div class="app-header-right">
+        <div class="time-stack">
+          <strong id="current-time">--:--</strong>
+          <span id="current-date">--</span>
+        </div>
+        <div class="mini-radar" aria-hidden="true"></div>
       </div>
     </header>
 
-    <main class="hud-grid">
-      <section class="panel command-panel" aria-labelledby="commands-title">
+    <nav class="hud-nav top-tabs" aria-label="Modules JARVIS">
+      <button type="button" class="is-active" data-command-center-tab="ai"><span>IA</span>IA LOCALE</button>
+      <button type="button" data-command-center-tab="voice"><span>VO</span>VOIX</button>
+      <button type="button" data-command-center-tab="modules"><span>MO</span>MODULES</button>
+      <button type="button" data-command-center-tab="organization"><span>OR</span>ORGANISATION</button>
+      <button type="button" data-command-center-tab="automations"><span>AU</span>AUTOMATISATIONS</button>
+      <button type="button" data-command-center-tab="memory"><span>ME</span>MEMOIRE</button>
+      <button type="button" data-command-center-tab="shortcuts"><span>DE</span>DESKTOP</button>
+      <button type="button" data-command-center-tab="system"><span>SY</span>SYSTEME</button>
+    </nav>
+
+    <main class="hud-grid app-body">
+      <aside class="left-sidebar" aria-label="Navigation principale">
+        <div class="sidebar-title">
+          <span>Navigation</span>
+          <strong>JARVIS CORE</strong>
+        </div>
+        <button type="button" class="is-active" data-nav-target="app"><span>AC</span>Accueil</button>
+        <button type="button" data-nav-target="analytics-panel"><span>DB</span>Dashboard</button>
+        <button type="button" data-nav-target="command-center-panel"><span>CC</span>Centre de commandes</button>
+        <button type="button" data-command-center-tab="ai"><span>AI</span>IA locale</button>
+        <button type="button" data-command-center-tab="voice"><span>VO</span>Voix</button>
+        <button type="button" data-nav-target="modules-panel"><span>MO</span>Modules</button>
+        <button type="button" data-nav-target="organization-panel"><span>OR</span>Organisation</button>
+        <button type="button" data-nav-target="automation-panel"><span>AU</span>Automatisations</button>
+        <button type="button" data-nav-target="memory-panel"><span>ME</span>Memoire</button>
+        <button type="button" data-command-center-tab="system"><span>SY</span>Systeme</button>
+        <button type="button" data-nav-target="profiles-panel"><span>PR</span>Modes</button>
+        <button type="button" data-nav-target="settings-panel"><span>PA</span>Parametres</button>
+        <button type="button" data-command="version mobile"><span>PW</span>Version mobile</button>
+        <small>JARVIS v2.3.0</small>
+      </aside>
+
+      <div class="main-content">
+      <section class="panel command-panel command-library-panel" aria-labelledby="commands-title">
         <div class="panel-heading">
           <span>01</span>
-          <h2 id="commands-title">Commandes</h2>
+          <h2 id="commands-title">Liste des commandes</h2>
         </div>
+
+        <input id="command-search" class="command-search" type="search" autocomplete="off" placeholder="Rechercher une commande..." />
 
         <ul class="command-list">
           <li><button type="button" data-command="aide">aide</button></li>
@@ -66,6 +127,11 @@
           <li><button type="button" data-command="plein ecran">plein ecran</button></li>
           <li><button type="button" data-command="fenetre">fenetre</button></li>
           <li><button type="button" data-command="minimise">minimise</button></li>
+          <li><button type="button" data-command="version mobile">version mobile</button></li>
+          <li><button type="button" data-command="mode mobile">mode mobile</button></li>
+          <li><button type="button" data-command="installer jarvis">installer jarvis</button></li>
+          <li><button type="button" data-command="fonctionnalites mobile">fonctionnalites mobile</button></li>
+          <li><button type="button" data-command="fonctionnalites desktop">fonctionnalites desktop</button></li>
           <li><button type="button" data-command="ferme jarvis">ferme jarvis</button></li>
           <li><button type="button" data-command="bonjour jarvis">bonjour jarvis</button></li>
           <li><button type="button" data-command="routine du matin">routine du matin</button></li>
@@ -98,6 +164,44 @@
           <li><button type="button" data-command="ouvrir youtube">ouvrir youtube</button></li>
           <li><button type="button" data-command="ouvrir github">ouvrir github</button></li>
           <li><button type="button" data-command="ouvrir calendrier">ouvrir calendrier</button></li>
+          <li><button type="button" data-command="mode ia">mode ia</button></li>
+          <li><button type="button" data-command="test ia">test ia</button></li>
+          <li><button type="button" data-command="stop ia">stop ia</button></li>
+          <li><button type="button" data-command="aide ia">aide ia</button></li>
+          <li><button type="button" data-command="modele ia">modele ia</button></li>
+          <li><button type="button" data-command="ollama statut">ollama statut</button></li>
+          <li><button type="button" data-command="affiche memoire">affiche memoire</button></li>
+          <li><button type="button" data-command="affiche notes">affiche notes</button></li>
+          <li><button type="button" data-command="vide memoire">vide memoire</button></li>
+          <li><button type="button" data-command="vide notes">vide notes</button></li>
+          <li><button type="button" data-command="ajoute tache finir la V3.2 de Jarvis">ajoute tache</button></li>
+          <li><button type="button" data-command="mes taches">mes taches</button></li>
+          <li><button type="button" data-command="taches du jour">taches du jour</button></li>
+          <li><button type="button" data-command="mes priorites">mes priorites</button></li>
+          <li><button type="button" data-command="mes rappels">mes rappels</button></li>
+          <li><button type="button" data-command="aujourd'hui">aujourd'hui</button></li>
+          <li><button type="button" data-command="ajoute planning rendez-vous pharmacie demain 10h">ajoute planning</button></li>
+          <li><button type="button" data-command="planning du jour">planning du jour</button></li>
+          <li><button type="button" data-command="routine matin">routine matin</button></li>
+          <li><button type="button" data-command="routine soir">routine soir</button></li>
+          <li><button type="button" data-command="resume journee">resume journee</button></li>
+          <li><button type="button" data-command="focus 25">focus 25</button></li>
+          <li><button type="button" data-command="sessions focus">sessions focus</button></li>
+          <li><button type="button" data-command="plan d'action">plan d'action</button></li>
+          <li><button type="button" data-command="dashboard">dashboard</button></li>
+          <li><button type="button" data-command="mes stats">mes stats</button></li>
+          <li><button type="button" data-command="score productivite">score productivite</button></li>
+          <li><button type="button" data-command="resume semaine">resume semaine</button></li>
+          <li><button type="button" data-command="progression">progression</button></li>
+          <li><button type="button" data-command="analyse journee">analyse journee</button></li>
+          <li><button type="button" data-command="automatisations">automatisations</button></li>
+          <li><button type="button" data-command="active briefing demarrage">active briefing demarrage</button></li>
+          <li><button type="button" data-command="active automatisation travail">active automatisation travail</button></li>
+          <li><button type="button" data-command="active rappels automatiques">active rappels auto</button></li>
+          <li><button type="button" data-command="active routine soir automatique">active routine soir auto</button></li>
+          <li><button type="button" data-command="active focus automatique">active focus auto</button></li>
+          <li><button type="button" data-command="lance briefing">lance briefing</button></li>
+          <li><button type="button" data-command="que dois-je automatiser">que dois-je automatiser</button></li>
         </ul>
       </section>
 
@@ -134,35 +238,350 @@
         </section>
       </section>
 
-      <section class="panel dashboard-panel" aria-labelledby="dashboard-title">
+      <section id="command-center-panel" class="panel command-center-panel" aria-labelledby="command-center-title">
+        <div class="command-center-header">
+          <div class="panel-heading">
+            <span>03</span>
+            <h2 id="command-center-title">IA locale</h2>
+          </div>
+          <small class="status-badge is-active">Ollama connecte</small>
+        </div>
+
+        <div class="command-center-view">
+          <aside class="command-center-nav" aria-label="Categories du centre de commandes">
+            <button type="button" class="is-active" data-command-center-tab="ai">IA locale</button>
+            <button type="button" data-command-center-tab="voice">Voix</button>
+            <button type="button" data-command-center-tab="modules">Modules</button>
+            <button type="button" data-command-center-tab="organization">Organisation</button>
+            <button type="button" data-command-center-tab="automations">Automatisations</button>
+            <button type="button" data-command-center-tab="memory">Memoire</button>
+            <button type="button" data-command-center-tab="shortcuts">Raccourcis</button>
+            <button type="button" data-command-center-tab="system">Systeme</button>
+            <button type="button" data-command-center-tab="settings">Parametres</button>
+          </aside>
+
+          <div class="command-center-main">
+            <article class="command-panel is-active" data-command-panel="ai">
+              <div class="command-view-head">
+                <span class="command-kicker">IA locale</span>
+                <h3>Gerez votre modele d'IA local</h3>
+                <p>Gerez votre modele d'IA local, les parametres d'inference et les ressources associees.</p>
+                <strong class="status-badge is-active">Ollama connecte</strong>
+              </div>
+              <div class="ai-action-grid">
+                <button type="button" class="ai-action-card" data-command="tester ia">
+                  <span>01</span>
+                  <strong>Lancer le modele</strong>
+                  <small>Tester la connexion locale.</small>
+                </button>
+                <button type="button" class="ai-action-card" data-command="parametres">
+                  <span>02</span>
+                  <strong>Configurer</strong>
+                  <small>Voix, interface et preferences.</small>
+                </button>
+                <button type="button" class="ai-action-card" data-command="modele ia">
+                  <span>03</span>
+                  <strong>Telecharger un modele</strong>
+                  <small>Afficher le modele Ollama actif.</small>
+                </button>
+              </div>
+              <div class="ia-status-grid">
+                <div class="command-card">
+                  <span>Modele actif</span>
+                  <strong>llama3.2:3b</strong>
+                  <small>Modele local pret</small>
+                  <em>Pret</em>
+                </div>
+                <div class="command-card">
+                  <span>Ressources</span>
+                  <strong>GPU / CPU</strong>
+                  <small>Utilisation moderee</small>
+                  <em>Stable</em>
+                </div>
+                <div class="command-card">
+                  <span>Contexte</span>
+                  <strong>4096 tokens</strong>
+                  <small>Fenetre de contexte</small>
+                  <em>OK</em>
+                </div>
+                <div class="command-card">
+                  <span>Securite</span>
+                  <strong>Local uniquement</strong>
+                  <small>Donnees privees</small>
+                  <em>Protege</em>
+                </div>
+              </div>
+              <small class="command-list-inline">Commandes : statut ia, test ia, aide ia, modele ia, changer modele ia</small>
+            </article>
+
+            <article class="command-panel" data-command-panel="voice" hidden>
+              <div class="command-view-head">
+                <span class="command-kicker">Voix</span>
+                <h3>Profil vocal de JARVIS</h3>
+                <p>Reglage de la synthese vocale, vitesse, pitch et volume.</p>
+                <strong class="status-badge is-active" id="command-center-voice">Profil vocal actif</strong>
+              </div>
+              <div class="command-action-row">
+                <button type="button" data-command="tester voix">Tester voix</button>
+                <button type="button" data-command="voix suivante">Voix suivante</button>
+                <button type="button" data-command="reset voix">Reset voix</button>
+                <button type="button" data-command="parametres voix">Parametres voix</button>
+              </div>
+              <div class="command-card-grid">
+                <div class="command-card"><span>Vitesse</span><strong id="command-center-voice-speed">1.00</strong></div>
+                <div class="command-card"><span>Pitch</span><strong id="command-center-voice-pitch">0.90</strong></div>
+                <div class="command-card"><span>Volume</span><strong id="command-center-voice-volume">1.00</strong></div>
+              </div>
+              <small class="command-list-inline">Commandes : tester voix, voix suivante, reset voix</small>
+            </article>
+
+            <article class="command-panel" data-command-panel="modules" hidden>
+              <div class="command-view-head">
+                <span class="command-kicker">Modules personnels</span>
+                <h3>Activation rapide des modules</h3>
+                <p>Travail, sport, veille IA, finance, routines et applications rapides.</p>
+                <strong class="status-badge">Modules prets</strong>
+              </div>
+              <div class="command-action-row">
+                <button type="button" data-command="ouvre module travail">Travail</button>
+                <button type="button" data-command="ouvre module sport">Sport</button>
+                <button type="button" data-command="ouvre module veille">Veille</button>
+                <button type="button" data-command="ouvre module apps">Apps</button>
+              </div>
+              <div class="command-card-grid">
+                <div class="command-card"><span>Disponibles</span><strong>6 modules</strong></div>
+                <div class="command-card"><span>Statut</span><strong>Local</strong></div>
+              </div>
+              <small class="command-list-inline">Commandes : ouvre module travail, ouvre module finance, ouvre module routines</small>
+            </article>
+
+            <article class="command-panel" data-command-panel="organization" hidden>
+              <div class="command-view-head">
+                <span class="command-kicker">Organisation</span>
+                <h3>Journee, taches et planning</h3>
+                <p>Acces direct aux taches, priorites, rappels et planning du jour.</p>
+                <strong class="status-badge is-active">Organisation active</strong>
+              </div>
+              <div class="command-action-row">
+                <button type="button" data-command="aujourd'hui">Aujourd'hui</button>
+                <button type="button" data-command="voir taches">Mes taches</button>
+                <button type="button" data-command="voir priorites">Priorites</button>
+                <button type="button" data-command="voir rappels">Rappels</button>
+                <button type="button" data-command="voir planning">Planning</button>
+              </div>
+              <div class="command-card-grid">
+                <div class="command-card"><span>Taches</span><strong id="command-center-task-count">0</strong></div>
+                <div class="command-card"><span>Rappels</span><strong id="command-center-reminder-count">0</strong></div>
+                <div class="command-card"><span>Planning</span><strong id="command-center-planning-count">0</strong></div>
+              </div>
+              <small class="command-list-inline">Commandes : ouvre organisation, voir taches, voir planning</small>
+            </article>
+
+            <article class="command-panel" data-command-panel="automations" hidden>
+              <div class="command-view-head">
+                <span class="command-kicker">Automatisations</span>
+                <h3>Routines locales controlees</h3>
+                <p>Briefing, mode travail, rappels, routine soir et focus automatique.</p>
+                <strong class="status-badge" id="command-center-automation-state">Etat local</strong>
+              </div>
+              <div class="command-action-row">
+                <button type="button" data-command="automatisations">Etat</button>
+                <button type="button" data-command="active toutes les automatisations">Tout activer</button>
+                <button type="button" data-command="desactive toutes les automatisations">Tout couper</button>
+                <button type="button" data-command="reset automatisations">Reset</button>
+              </div>
+              <div class="command-card-grid">
+                <div class="command-card"><span>Briefing</span><strong id="command-center-startup-automation">--</strong></div>
+                <div class="command-card"><span>Mode travail</span><strong id="command-center-work-automation">--</strong></div>
+                <div class="command-card"><span>Rappels</span><strong id="command-center-reminder-automation">--</strong></div>
+                <div class="command-card"><span>Routine soir</span><strong id="command-center-evening-automation">--</strong></div>
+                <div class="command-card"><span>Focus</span><strong id="command-center-focus-automation">--</strong></div>
+              </div>
+              <small class="command-list-inline">Commandes : active briefing demarrage, active focus automatique</small>
+            </article>
+
+            <article class="command-panel" data-command-panel="memory" hidden>
+              <div class="command-view-head">
+                <span class="command-kicker">Memoire locale</span>
+                <h3>Memoires et notes privees</h3>
+                <p>Informations retenues uniquement sur votre PC, sur commande explicite.</p>
+                <strong class="status-badge is-active">Stockage local</strong>
+              </div>
+              <div class="command-action-row">
+                <button type="button" data-command="resume memoire">Resume</button>
+                <button type="button" data-command="affiche memoire">Afficher memoire</button>
+                <button type="button" data-command="affiche notes">Afficher notes</button>
+              </div>
+              <div class="command-card-grid">
+                <div class="command-card"><span>Memoires</span><strong id="command-center-memory-count">0</strong></div>
+                <div class="command-card"><span>Notes</span><strong id="command-center-note-count">0</strong></div>
+              </div>
+              <small class="command-list-inline">Commandes : ouvre memoire, resume memoire, affiche notes</small>
+            </article>
+
+            <article class="command-panel" data-command-panel="shortcuts" hidden>
+              <div class="command-view-head">
+                <span class="command-kicker">Raccourcis desktop</span>
+                <h3>Actions Windows rapides</h3>
+                <p>Documents, bureau, calculatrice, navigateur, plein ecran et fenetre.</p>
+                <strong class="status-badge">Desktop Electron</strong>
+              </div>
+              <div class="command-action-row">
+                <button type="button" data-command="ouvre documents">Documents</button>
+                <button type="button" data-command="ouvre bureau">Bureau</button>
+                <button type="button" data-command="ouvre calculatrice">Calculatrice</button>
+                <button type="button" data-command="plein ecran">Plein ecran</button>
+                <button type="button" data-command="fenetre">Fenetre</button>
+              </div>
+              <div class="command-card-grid">
+                <div class="command-card"><span>Dossiers</span><strong>Documents et bureau</strong></div>
+                <div class="command-card"><span>Fenetre</span><strong>Plein ecran ou fenetre</strong></div>
+                <div class="command-card"><span>Apps</span><strong>Calculatrice et navigateur</strong></div>
+              </div>
+              <small class="command-list-inline">Commandes : raccourcis desktop, ouvre navigateur, minimise</small>
+            </article>
+
+            <article class="command-panel" data-command-panel="system" hidden>
+              <div class="command-view-head">
+                <span class="command-kicker">Systeme</span>
+                <h3>Diagnostic JARVIS</h3>
+                <p>Etat Electron, Ollama, donnees locales, automatisations et activite.</p>
+                <strong class="status-badge is-active">Surveillance locale</strong>
+              </div>
+              <div class="command-action-row">
+                <button type="button" data-command="diagnostic jarvis">Diagnostic</button>
+                <button type="button" data-command="etat systeme">Etat systeme</button>
+                <button type="button" data-command="diagnostic intelligent">Diagnostic IA</button>
+              </div>
+              <div class="command-card-grid">
+                <div class="command-card"><span>Version</span><strong>V3.6</strong></div>
+                <div class="command-card"><span>Electron</span><strong>Actif</strong></div>
+              </div>
+              <small class="command-list-inline">Commandes : scan systeme, sante jarvis</small>
+            </article>
+
+            <article class="command-panel" data-command-panel="settings" hidden>
+              <div class="command-view-head">
+                <span class="command-kicker">Parametres</span>
+                <h3>Reglages et actions avancees</h3>
+                <p>Acces aux reglages voix, automatisations, historique et actions locales sensibles.</p>
+                <strong class="status-badge">Mode prudent</strong>
+              </div>
+              <div class="command-action-row">
+                <button type="button" data-command="parametres voix">Parametres voix</button>
+                <button type="button" data-command="parametres avances">Parametres avances</button>
+                <button type="button" data-command="reset jarvis">Reset interface</button>
+                <button type="button" data-command="vider historique">Vider historique</button>
+              </div>
+              <div class="command-card-grid">
+                <div class="command-card"><span>Voix</span><strong>Reglages vocaux</strong></div>
+                <div class="command-card"><span>Historique</span><strong>Nettoyage local</strong></div>
+                <div class="command-card"><span>Securite</span><strong>Reset avec confirmation</strong></div>
+              </div>
+              <small class="command-list-inline">Commandes : reset voix, reset automatisations, vider toutes les donnees</small>
+            </article>
+          </div>
+
+          <aside class="command-center-status" aria-label="Quick Status">
+            <span>Quick Status</span>
+            <dl>
+              <div><dt>IA</dt><dd>Locale active</dd></div>
+              <div><dt>Ollama</dt><dd>llama3.2:3b</dd></div>
+              <div><dt>Voix</dt><dd>Profil actif</dd></div>
+              <div><dt>Memoire</dt><dd>Locale</dd></div>
+              <div><dt>Taches</dt><dd>En cours</dd></div>
+              <div><dt>Rappels</dt><dd>Aujourd'hui</dd></div>
+              <div><dt>Autos</dt><dd>Actives</dd></div>
+              <div><dt>Activite</dt><dd>Synchronisee</dd></div>
+            </dl>
+          </aside>
+        </div>
+      </section>
+      </div>
+
+      <section class="panel dashboard-panel right-sidebar" aria-labelledby="dashboard-title">
         <div class="panel-heading">
-          <span>03</span>
-          <h2 id="dashboard-title">Dashboard</h2>
+          <span>STATUT</span>
+          <h2 id="dashboard-title">Statut rapide</h2>
         </div>
 
         <div class="dashboard-cards">
-          <article class="dashboard-card">
-            <span>Heure</span>
-            <strong id="current-time">--:--</strong>
-            <small>Synchronisee</small>
+          <article class="dashboard-card dashboard-card-wide ai-card">
+            <span>IA</span>
+            <strong id="ai-state">IA locale : Ollama</strong>
+            <small id="ai-detail">Modele llama3.2:3b</small>
+            <em id="command-status-ai">Locale active</em>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide">
+            <span>Ollama</span>
+            <strong id="command-status-ollama">llama3.2:3b</strong>
+            <small>Connecte</small>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide voice-card">
+            <span>Voix</span>
+            <strong id="voice-state">Repos</strong>
+            <small id="voice-detail">Micro inactif</small>
+            <em id="command-status-voice">Profil actif</em>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide voice-card">
+            <span>Micro</span>
+            <strong id="micro-state">Non teste</strong>
+            <small id="micro-detail">Commande : test micro</small>
+            <em id="micro-access">Diagnostic</em>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide voice-card">
+            <span>Reconnaissance vocale</span>
+            <strong id="speech-recognition-state">En attente</strong>
+            <small id="speech-recognition-detail">Web Speech non lance</small>
+            <em id="voice-error-state">Aucune erreur</em>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide mobile-pwa-card">
+            <span>Version mobile</span>
+            <strong id="pwa-state">PWA prete</strong>
+            <small id="pwa-detail">Mode mobile : auto</small>
+            <em id="pwa-installable-state">Installation en attente</em>
+            <button id="install-pwa-btn" class="mini-action-btn" type="button" hidden>Installer JARVIS</button>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide">
+            <span>Memoire</span>
+            <strong id="command-status-memory">0</strong>
+            <small>Locale</small>
           </article>
 
           <article class="dashboard-card">
-            <span>Date</span>
-            <strong id="current-date">--</strong>
-            <small>Calendrier local</small>
+            <span>Taches</span>
+            <strong id="command-status-tasks">0</strong>
+            <small>En cours</small>
           </article>
 
           <article class="dashboard-card">
+            <span>Rappels</span>
+            <strong id="command-status-reminders">0</strong>
+            <small>Aujourd'hui</small>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide">
+            <span>Automatisations</span>
+            <strong id="command-status-automations">--</strong>
+            <small>Actives</small>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide">
+            <span>Derniere activite</span>
+            <strong id="command-status-activity">--</strong>
+            <small>Statut IA verifie</small>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide">
             <span>Statut systeme</span>
             <strong id="system-state">En ligne</strong>
             <small id="system-detail">Noyau stable</small>
-          </article>
-
-          <article class="dashboard-card">
-            <span>Statut vocal</span>
-            <strong id="voice-state">Repos</strong>
-            <small id="voice-detail">Micro inactif</small>
           </article>
 
           <article class="dashboard-card dashboard-card-wide">
@@ -203,6 +622,8 @@
             <div class="metric-bar"><span id="network-bar"></span></div>
           </div>
         </div>
+
+        <button class="history-shortcut" type="button" data-nav-target="history-panel">Voir l'historique complet</button>
       </section>
     </main>
 
@@ -296,10 +717,328 @@
       </div>
     </section>
 
+    <section id="memory-panel" class="panel memory-panel" aria-labelledby="memory-title">
+      <div class="memory-header">
+        <div class="panel-heading">
+          <span>06</span>
+          <h2 id="memory-title">Memoire locale</h2>
+        </div>
+        <small class="memory-summary">Stockage local prive</small>
+      </div>
+
+      <div class="memory-grid">
+        <article class="memory-stat">
+          <span>Memoires</span>
+          <strong id="memory-count">0</strong>
+          <small>Elements retenus</small>
+        </article>
+
+        <article class="memory-stat">
+          <span>Notes</span>
+          <strong id="notes-count">0</strong>
+          <small>Idees sauvegardees</small>
+        </article>
+
+        <article class="memory-stat memory-stat-wide">
+          <span>Derniere memoire</span>
+          <strong id="latest-memory">Aucune memoire enregistree</strong>
+          <small>Uniquement si vous demandez a JARVIS de memoriser</small>
+        </article>
+      </div>
+
+      <div class="memory-actions">
+        <button id="show-memory-btn" type="button">Afficher memoire</button>
+        <button id="clear-memory-btn" type="button">Vider memoire</button>
+        <button id="show-notes-btn" type="button">Afficher notes</button>
+        <button id="clear-notes-btn" type="button">Vider notes</button>
+      </div>
+    </section>
+
+    <section id="organization-panel" class="panel organization-panel" aria-labelledby="organization-title">
+      <div class="organization-header">
+        <div class="panel-heading">
+          <span>07</span>
+          <h2 id="organization-title">Organisation</h2>
+        </div>
+        <small class="organization-summary">Taches, priorites et rappels locaux</small>
+      </div>
+
+      <div class="organization-grid">
+        <article class="organization-stat">
+          <span>Taches</span>
+          <strong id="task-count">0</strong>
+          <small>En cours</small>
+        </article>
+
+        <article class="organization-stat">
+          <span>Priorites</span>
+          <strong id="priority-count">0</strong>
+          <small>Haute importance</small>
+        </article>
+
+        <article class="organization-stat">
+          <span>Rappels</span>
+          <strong id="reminder-count">0</strong>
+          <small>Actifs</small>
+        </article>
+
+        <article class="organization-stat organization-stat-wide">
+          <span>Derniere note</span>
+          <strong id="latest-note-org">Aucune note locale</strong>
+          <small>Disponible dans la vue Aujourd'hui</small>
+        </article>
+      </div>
+
+      <div class="organization-actions">
+        <button id="show-tasks-btn" type="button">Voir taches</button>
+        <button id="show-priorities-btn" type="button">Voir priorites</button>
+        <button id="show-reminders-btn" type="button">Voir rappels</button>
+        <button id="today-btn" type="button">Aujourd'hui</button>
+      </div>
+    </section>
+
+    <section id="briefing-panel" class="panel briefing-panel" aria-labelledby="briefing-title">
+      <div class="briefing-header">
+        <div class="panel-heading">
+          <span>08</span>
+          <h2 id="briefing-title">Briefing journee</h2>
+        </div>
+        <small class="briefing-summary">Planning, focus et priorite principale</small>
+      </div>
+
+      <div class="briefing-grid">
+        <article class="briefing-stat">
+          <span>Date</span>
+          <strong id="briefing-date">Aujourd'hui</strong>
+          <small>Briefing local</small>
+        </article>
+
+        <article class="briefing-stat briefing-stat-wide">
+          <span>Priorite principale</span>
+          <strong id="briefing-priority">Aucune priorite</strong>
+          <small>Issue des taches et priorites locales</small>
+        </article>
+
+        <article class="briefing-stat">
+          <span>Taches restantes</span>
+          <strong id="briefing-task-count">0</strong>
+          <small>A traiter</small>
+        </article>
+
+        <article class="briefing-stat">
+          <span>Rappels actifs</span>
+          <strong id="briefing-reminder-count">0</strong>
+          <small>Non termines</small>
+        </article>
+
+        <article class="briefing-stat">
+          <span>Prochain planning</span>
+          <strong id="briefing-next-planning">Aucun element aujourd'hui</strong>
+          <small>Vue du jour</small>
+        </article>
+
+        <article class="briefing-stat">
+          <span>Focus</span>
+          <strong id="briefing-focus">Aucune session active</strong>
+          <small>Session en cours</small>
+        </article>
+      </div>
+    </section>
+
+    <section id="bilan-panel" class="panel bilan-panel" aria-labelledby="bilan-title">
+      <div class="bilan-header">
+        <div class="panel-heading">
+          <span>09</span>
+          <h2 id="bilan-title">Bilan</h2>
+        </div>
+        <small class="bilan-status">Journal local de la journee</small>
+      </div>
+
+      <div class="bilan-grid">
+        <article class="bilan-stat bilan-stat-wide">
+          <span>Resume</span>
+          <strong id="bilan-summary">Aucun resume pour aujourd'hui</strong>
+          <small>Commande : bilan journee ...</small>
+        </article>
+
+        <article class="bilan-stat">
+          <span>Victoires</span>
+          <strong id="bilan-wins">Aucune victoire notee</strong>
+          <small>Commande : victoire ...</small>
+        </article>
+
+        <article class="bilan-stat">
+          <span>Blocages</span>
+          <strong id="bilan-blockers">Aucun blocage note</strong>
+          <small>Commande : blocage ...</small>
+        </article>
+      </div>
+
+      <div class="bilan-actions">
+        <button id="show-bilan-btn" type="button">Afficher bilan</button>
+        <button id="evening-routine-btn" type="button">Routine soir</button>
+      </div>
+    </section>
+
+    <section id="analytics-panel" class="panel analytics-panel" aria-labelledby="analytics-title">
+      <div class="analytics-header">
+        <div class="panel-heading">
+          <span>10</span>
+          <h2 id="analytics-title">Dashboard</h2>
+        </div>
+        <small id="analytics-last-activity" class="analytics-status">Derniere activite : aucune</small>
+      </div>
+
+      <div class="analytics-grid">
+        <article class="analytics-card">
+          <span>Taches</span>
+          <strong id="analytics-total-tasks">0/0</strong>
+          <small>Terminees / total</small>
+          <div class="mini-bar"><span style="width: 45%"></span></div>
+        </article>
+
+        <article class="analytics-card">
+          <span>Priorites</span>
+          <strong id="analytics-priorities">0</strong>
+          <small>Actives</small>
+          <div class="mini-bar"><span style="width: 30%"></span></div>
+        </article>
+
+        <article class="analytics-card">
+          <span>Rappels</span>
+          <strong id="analytics-reminders">0 actifs</strong>
+          <small>A surveiller</small>
+          <div class="mini-bar"><span style="width: 35%"></span></div>
+        </article>
+
+        <article class="analytics-card">
+          <span>Focus</span>
+          <strong id="analytics-focus">0 min</strong>
+          <small>Temps termine</small>
+          <div class="mini-bar"><span style="width: 55%"></span></div>
+        </article>
+
+        <article class="analytics-card">
+          <span>Notes</span>
+          <strong id="analytics-notes">0</strong>
+          <small>Idees locales</small>
+          <div class="mini-bar"><span style="width: 25%"></span></div>
+        </article>
+
+        <article class="analytics-card">
+          <span>Planning</span>
+          <strong id="analytics-planning">0</strong>
+          <small>Aujourd'hui</small>
+          <div class="mini-bar"><span style="width: 40%"></span></div>
+        </article>
+
+        <article class="analytics-card score-card">
+          <span>Score productivite</span>
+          <div id="analytics-score-ring" class="score-ring" style="--score: 0%">
+            <strong id="analytics-score">0/100</strong>
+          </div>
+          <small id="analytics-score-label">A structurer</small>
+        </article>
+      </div>
+
+      <div class="analytics-actions">
+        <button id="show-dashboard-btn" type="button">Afficher dashboard</button>
+        <button id="show-weekly-btn" type="button">Resume semaine</button>
+      </div>
+    </section>
+
+    <section id="weekly-panel" class="panel weekly-panel" aria-labelledby="weekly-title">
+      <div class="weekly-header">
+        <div class="panel-heading">
+          <span>11</span>
+          <h2 id="weekly-title">Resume semaine</h2>
+        </div>
+        <small class="weekly-status">7 derniers jours</small>
+      </div>
+
+      <div class="weekly-grid">
+        <article class="weekly-stat">
+          <span>Taches terminees</span>
+          <strong id="weekly-completed-tasks">0</strong>
+        </article>
+        <article class="weekly-stat">
+          <span>Sessions focus</span>
+          <strong id="weekly-focus-sessions">0</strong>
+        </article>
+        <article class="weekly-stat">
+          <span>Temps focus</span>
+          <strong id="weekly-focus-minutes">0 min</strong>
+        </article>
+        <article class="weekly-stat">
+          <span>Notes creees</span>
+          <strong id="weekly-notes">0</strong>
+        </article>
+        <article class="weekly-stat">
+          <span>Bilans</span>
+          <strong id="weekly-logs">0</strong>
+        </article>
+        <article class="weekly-stat">
+          <span>Priorites restantes</span>
+          <strong id="weekly-priorities">0</strong>
+        </article>
+      </div>
+    </section>
+
+    <section id="automation-panel" class="panel automation-panel" aria-labelledby="automation-title">
+      <div class="automation-header">
+        <div class="panel-heading">
+          <span>12</span>
+          <h2 id="automation-title">Automatisations</h2>
+        </div>
+        <small id="automation-summary" class="automation-status">Aucune automatisation active.</small>
+      </div>
+
+      <div class="automation-grid">
+        <article class="automation-card">
+          <span>Briefing demarrage</span>
+          <strong id="automation-startup-status">Inactive</strong>
+          <small>Briefing du jour au lancement</small>
+          <button type="button" data-automation-key="startupBriefing" data-automation-value="true">Activer</button>
+        </article>
+
+        <article class="automation-card">
+          <span>Mode travail</span>
+          <strong id="automation-work-status">Inactive</strong>
+          <small>Priorites, taches et outils</small>
+          <button type="button" data-automation-key="workModeAutomation" data-automation-value="true">Activer</button>
+        </article>
+
+        <article class="automation-card">
+          <span>Rappels automatiques</span>
+          <strong id="automation-reminders-status">Active</strong>
+          <small>Verification locale toutes les 60s</small>
+          <button type="button" data-automation-key="automaticReminders" data-automation-value="false">Desactiver</button>
+        </article>
+
+        <article class="automation-card">
+          <span>Routine soir</span>
+          <strong id="automation-evening-status">Inactive</strong>
+          <small>Proposition apres 20h30</small>
+          <button type="button" data-automation-key="eveningRoutine" data-automation-value="true">Activer</button>
+        </article>
+
+        <article class="automation-card">
+          <span>Focus automatique</span>
+          <strong id="automation-focus-status">Active</strong>
+          <small>Session focus et timer</small>
+          <button type="button" data-automation-key="focusAutomation" data-automation-value="false">Desactiver</button>
+        </article>
+      </div>
+
+      <div class="automation-actions">
+        <button id="reset-automations-btn" type="button">Reset automatisations</button>
+      </div>
+    </section>
+
     <section id="settings-panel" class="panel settings-panel" aria-labelledby="settings-title">
       <div class="settings-header">
         <div class="panel-heading">
-          <span>05</span>
+          <span>13</span>
           <h2 id="settings-title">Parametres</h2>
         </div>
         <small id="settings-status" class="settings-status">Reglages prets</small>
@@ -338,10 +1077,112 @@
       </div>
     </section>
 
-    <section class="history" aria-labelledby="history-title">
+    <section id="profiles-panel" class="panel profiles-panel" aria-labelledby="profiles-title">
+      <div class="profiles-header">
+        <div class="panel-heading">
+          <span>14</span>
+          <h2 id="profiles-title">Modes et profils</h2>
+        </div>
+        <small id="active-mode-label" class="profiles-status">Mode standard</small>
+      </div>
+
+      <div class="profiles-grid">
+        <article class="profile-card is-active" data-mode-card="standard">
+          <span>Profil</span>
+          <strong>Standard</strong>
+          <p>Interface equilibree, animations normales et modules classiques visibles.</p>
+          <small>Mode par defaut</small>
+          <button type="button" data-mode-profile="standard">Activer</button>
+        </article>
+
+        <article class="profile-card" data-mode-card="work">
+          <span>Profil</span>
+          <strong>Travail</strong>
+          <p>Met en avant taches, priorites, planning, rappels et focus.</p>
+          <small>Productivite</small>
+          <button type="button" data-mode-profile="work">Activer</button>
+        </article>
+
+        <article class="profile-card" data-mode-card="focus">
+          <span>Profil</span>
+          <strong>Focus</strong>
+          <p>Reduit les animations et masque les elements non essentiels.</p>
+          <small>Concentration</small>
+          <button type="button" data-mode-profile="focus">Activer</button>
+        </article>
+
+        <article class="profile-card" data-mode-card="night">
+          <span>Profil</span>
+          <strong>Nuit</strong>
+          <p>Luminosite reduite, glow doux et animations plus lentes.</p>
+          <small>Confort tardif</small>
+          <button type="button" data-mode-profile="night">Activer</button>
+        </article>
+
+        <article class="profile-card" data-mode-card="sport">
+          <span>Profil</span>
+          <strong>Sport</strong>
+          <p>Met en avant seance du jour, repos, objectif physique et hydratation.</p>
+          <small>Dynamique</small>
+          <button type="button" data-mode-profile="sport">Activer</button>
+        </article>
+
+        <article class="profile-card" data-mode-card="ai">
+          <span>Profil</span>
+          <strong>IA</strong>
+          <p>Zone de reponse, statut Ollama et modele local au premier plan.</p>
+          <small>Conversation locale</small>
+          <button type="button" data-mode-profile="ai">Activer</button>
+        </article>
+
+        <article class="profile-card" data-mode-card="hud">
+          <span>Profil</span>
+          <strong>Full HUD</strong>
+          <p>Glow renforce, decorations visibles et ambiance futuriste maximale.</p>
+          <small>Immersion</small>
+          <button type="button" data-mode-profile="hud">Activer</button>
+        </article>
+      </div>
+
+      <div class="theme-controls" aria-label="Themes et animations">
+        <button type="button" data-theme-profile="cyan">Theme cyan</button>
+        <button type="button" data-theme-profile="blue">Theme bleu</button>
+        <button type="button" data-theme-profile="green">Theme vert</button>
+        <button type="button" data-theme-profile="violet">Theme violet</button>
+        <button type="button" data-command="reduis animations">Reduire animations</button>
+        <button type="button" data-command="active animations">Activer animations</button>
+      </div>
+    </section>
+
+    <section id="advanced-settings-panel" class="panel advanced-settings-panel" aria-labelledby="advanced-settings-title">
+      <div class="advanced-settings-header">
+        <div class="panel-heading">
+          <span>15</span>
+          <h2 id="advanced-settings-title">Parametres avances</h2>
+        </div>
+        <small>Actions locales sensibles</small>
+      </div>
+
+      <div class="advanced-actions">
+        <button type="button" data-command="reset jarvis">Reset interface</button>
+        <button type="button" data-command="reset voix">Reset voix</button>
+        <button type="button" data-command="reset automatisations">Reset automatisations</button>
+        <button type="button" data-command="vider historique">Vider historique</button>
+        <button type="button" data-command="vide memoire">Vider memoire</button>
+        <button type="button" data-command="vide notes">Vider notes</button>
+        <button type="button" data-command="vide taches">Vider taches</button>
+        <button type="button" data-command="vide rappels">Vider rappels</button>
+        <button type="button" data-command="vide planning">Vider planning</button>
+        <button type="button" data-command="vider toutes les donnees">Vider toutes les donnees</button>
+      </div>
+
+      <p class="advanced-warning">Les suppressions locales sont irreversibles. Pour un reset total, JARVIS demande une confirmation explicite.</p>
+    </section>
+
+    <section id="history-panel" class="history" aria-labelledby="history-title">
       <div class="history-header">
         <div class="panel-heading">
-          <span>06</span>
+          <span>08</span>
           <h2 id="history-title">Historique commandes</h2>
         </div>
         <button id="clear-history-btn" type="button">Vider l'historique</button>
@@ -349,6 +1190,11 @@
 
       <ol id="history-list" class="history-list"></ol>
     </section>
+
+    <footer class="app-footer">
+      <span>MODE LOCAL</span>
+      <span>UTILISATEUR : ADMIN</span>
+    </footer>
   </div>
 
   <script src="script.js"></script>
