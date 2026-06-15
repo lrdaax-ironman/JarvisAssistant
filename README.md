@@ -4,23 +4,38 @@ Application desktop Electron locale avec interface JARVIS, Ollama, memoire, orga
 
 ## Version PWA mobile
 
-Depuis la V4.0, JARVIS prepare aussi une version web mobile installable.
+Depuis la V4.1 corrective, JARVIS dispose d'une vraie version mobile dediee, separee de l'interface desktop Electron.
 
 Fichiers PWA :
 
+- `mobile.html`
+- `mobile.css`
+- `mobile.js`
 - `manifest.json`
 - `service-worker.js`
 - `assets/icons/icon-192.png`
 - `assets/icons/icon-512.png`
 
-La version mobile peut etre ouverte dans un navigateur puis ajoutee a l'ecran d'accueil si le navigateur le permet.
+La version mobile peut etre ouverte directement avec `mobile.html`, puis ajoutee a l'ecran d'accueil si le navigateur le permet. Le manifest utilise `mobile.html` comme `start_url`.
+
+La version desktop continue d'utiliser :
+
+- `index.html`
+- `style.css`
+- `script.js`
 
 Commandes utiles :
 
 ```text
+aide
 version mobile
 mode mobile
 installer jarvis
+notes
+taches
+rappels
+planning
+memoire
 statut web
 deploiement
 debug mobile
@@ -34,8 +49,10 @@ Notes :
 - La version desktop Electron continue de fonctionner avec `npm.cmd start`.
 - Les commandes Windows restent reservees a Electron.
 - Ollama local reste disponible sur le desktop. Une passerelle mobile pourra etre ajoutee plus tard.
+- La version mobile utilise `localStorage` pour les notes, taches, rappels, planning, memoire et preferences simples.
+- `mobile.js` ne depend pas de `window.jarvisAPI` et reste stable dans un navigateur mobile.
 - Le service worker est enregistre uniquement en contexte web `http` ou `https`, pas en `file://` Electron.
-- Si le mobile garde un ancien rendu, utiliser `debug mobile`, puis `rafraichir mobile`. Le service worker utilise une strategie network-first pour `style.css`, `voice.css` et `script.js`.
+- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v1` met en cache `mobile.html`, `mobile.css`, `mobile.js` et les fichiers desktop essentiels.
 
 ## Deploiement web
 
@@ -44,9 +61,12 @@ Depuis la V4.1, JARVIS est prepare pour un deploiement statique sur Vercel ou Ne
 Fichiers web attendus a la racine :
 
 - `index.html`
+- `mobile.html`
 - `style.css`
+- `mobile.css`
 - `voice.css`
 - `script.js`
+- `mobile.js`
 - `manifest.json`
 - `service-worker.js`
 - `assets/icons/icon-192.png`

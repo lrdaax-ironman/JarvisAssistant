@@ -2924,6 +2924,30 @@ body.mode-night {
   font-size: 1.05rem;
 }
 
+.desktop-mobile-link {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border: 1px solid rgba(0, 217, 255, 0.34);
+  border-radius: 14px;
+  color: var(--cyan-soft);
+  background: rgba(0, 217, 255, 0.075);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.desktop-mobile-link:hover,
+.desktop-mobile-link:focus-visible {
+  border-color: rgba(0, 217, 255, 0.7);
+  box-shadow: 0 0 18px rgba(0, 217, 255, 0.18);
+  outline: none;
+}
+
 .mini-action-btn {
   min-height: 38px;
   width: 100%;
@@ -3013,6 +3037,11 @@ body.mobile-mode,
     justify-content: center;
     gap: 8px;
     padding: 0 14px;
+  }
+
+  .desktop-mobile-link {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .app-header-center {

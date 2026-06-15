@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07111b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="JARVIS" />
+  <title>JARVIS Mobile</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+  <link rel="stylesheet" href="mobile.css" />
+</head>
+<body>
+  <main class="mobile-shell" id="mobile-app">
+    <header class="mobile-header">
+      <div>
+        <span class="eyebrow">Mode mobile</span>
+        <h1>JARVIS</h1>
+      </div>
+      <div class="status-badge" id="mobile-status">Pret</div>
+    </header>
+
+    <section class="assistant-panel" aria-labelledby="assistant-title">
+      <div class="panel-title">
+        <span>Assistant</span>
+        <strong id="assistant-title">Console mobile</strong>
+      </div>
+      <div class="response-card" id="assistant-response" aria-live="polite">
+        <p>Bonjour monsieur. Version mobile active. Entrez une commande ou choisissez un module.</p>
+      </div>
+    </section>
+
+    <section class="install-panel" id="install-panel" hidden>
+      <div>
+        <strong>Installer JARVIS</strong>
+        <span>Ajoutez la PWA a votre ecran d'accueil.</span>
+      </div>
+      <button type="button" id="install-button">Installer</button>
+    </section>
+
+    <section class="mobile-grid-section" aria-labelledby="modules-title">
+      <div class="section-heading">
+        <span>Modules</span>
+        <h2 id="modules-title">Centre mobile</h2>
+      </div>
+
+      <div class="module-grid">
+        <button type="button" class="module-card" data-mobile-command="ia">
+          <span>IA</span>
+          <strong>IA</strong>
+          <small>Etat et limites mobiles</small>
+        </button>
+        <button type="button" class="module-card" data-mobile-command="taches">
+          <span>TA</span>
+          <strong>Taches</strong>
+          <small id="tasks-count">0 element</small>
+        </button>
+        <button type="button" class="module-card" data-mobile-command="notes">
+          <span>NO</span>
+          <strong>Notes</strong>
+          <small id="notes-count">0 note</small>
+        </button>
+        <button type="button" class="module-card" data-mobile-command="rappels">
+          <span>RA</span>
+          <strong>Rappels</strong>
+          <small id="reminders-count">0 rappel</small>
+        </button>
+        <button type="button" class="module-card" data-mobile-command="planning">
+          <span>PL</span>
+          <strong>Planning</strong>
+          <small id="planning-count">0 entree</small>
+        </button>
+        <button type="button" class="module-card" data-mobile-command="memoire">
+          <span>ME</span>
+          <strong>Memoire</strong>
+          <small id="memory-count">0 memoire</small>
+        </button>
+        <button type="button" class="module-card" data-mobile-command="mode mobile">
+          <span>MO</span>
+          <strong>Modes</strong>
+          <small>Interface tactile</small>
+        </button>
+        <button type="button" class="module-card" data-mobile-command="parametres">
+          <span>PA</span>
+          <strong>Parametres</strong>
+          <small>Preferences locales</small>
+        </button>
+      </div>
+    </section>
+
+    <section class="quick-panel" aria-labelledby="quick-title">
+      <div class="section-heading">
+        <span>Commandes</span>
+        <h2 id="quick-title">Commandes rapides</h2>
+      </div>
+
+      <div class="quick-grid">
+        <button type="button" data-mobile-command="aide">Aide</button>
+        <button type="button" data-mobile-command="version mobile">Version mobile</button>
+        <button type="button" data-mobile-command="fonctionnalites mobile">Fonctions mobile</button>
+        <button type="button" data-mobile-command="fonctionnalites desktop">Fonctions desktop</button>
+        <button type="button" data-mobile-command="installer jarvis">Installer JARVIS</button>
+        <button type="button" data-mobile-command="mode mobile">Mode mobile</button>
+      </div>
+    </section>
+
+    <section class="mobile-summary" aria-labelledby="summary-title">
+      <div class="section-heading">
+        <span>Local</span>
+        <h2 id="summary-title">Donnees mobiles</h2>
+      </div>
+      <div class="summary-list">
+        <div><span>Stockage</span><strong>localStorage</strong></div>
+        <div><span>Electron</span><strong>Non requis</strong></div>
+        <div><span>Ollama</span><strong>Desktop</strong></div>
+        <div><span>PWA</span><strong id="pwa-state">Detection...</strong></div>
+      </div>
+    </section>
+  </main>
+
+  <form class="command-bar" id="command-form">
+    <input id="command-input" type="text" autocomplete="off" placeholder="Entrez une commande..." />
+    <button type="submit" id="send-button">Envoyer</button>
+  </form>
+
+  <script src="mobile.js"></script>
+</body>
+</html>

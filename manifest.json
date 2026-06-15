@@ -2,7 +2,7 @@
   "name": "JARVIS Assistant",
   "short_name": "JARVIS",
   "description": "Assistant personnel local en interface JARVIS, compatible desktop Electron et PWA mobile.",
-  "start_url": "./",
+  "start_url": "./mobile.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#07111b",
