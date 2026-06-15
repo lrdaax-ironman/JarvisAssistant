@@ -14,6 +14,8 @@ const clearHistoryBtn = $("clear-history-btn");
 const welcomeSequence = $("welcome-sequence");
 const welcomeMessage = $("welcome-message");
 const mobileModeBadge = $("mobile-mode-badge");
+const mobileMenuToggle = $("mobile-menu-toggle");
+const mobileNavigation = $("mobile-navigation");
 const pwaState = $("pwa-state");
 const pwaDetail = $("pwa-detail");
 const pwaInstallableState = $("pwa-installable-state");
@@ -410,6 +412,8 @@ const availableCommands = [
   "installer jarvis",
   "statut web",
   "deploiement",
+  "debug mobile",
+  "rafraichir mobile",
   "fonctionnalites mobile",
   "fonctionnalites desktop",
   "reduis animations",
@@ -512,7 +516,17 @@ function writeJsonStorage(key, value) {
 }
 
 function setSettingsStatus(message) {
-  settingsStatus.textContent = message;
+  if (settingsStatus) settingsStatus.textContent = message;
+}
+
+function safeBindElement(element, eventName, handler, options) {
+  if (!element || typeof element.addEventListener !== "function") return false;
+  element.addEventListener(eventName, handler, options);
+  return true;
+}
+
+function safeBindButton(id, handler) {
+  return safeBindElement(document.getElementById(id), "click", handler);
 }
 
 function getDesktopApi() {
@@ -545,11 +559,25 @@ function setPwaStatus(state, detail = "", installable = "") {
   if (pwaInstallableState) pwaInstallableState.textContent = installable;
 }
 
-function updateMobileMode() {
+function closeMobileMenu() {
+  if (app) app.classList.remove("mobile-nav-open");
+  if (document.body) document.body.classList.remove("mobile-nav-open");
+  if (mobileMenuToggle) mobileMenuToggle.setAttribute("aria-expanded", "false");
+}
+
+function toggleMobileMenu() {
+  const nextOpen = !(app && app.classList.contains("mobile-nav-open"));
+  if (app) app.classList.toggle("mobile-nav-open", nextOpen);
+  if (document.body) document.body.classList.toggle("mobile-nav-open", nextOpen);
+  if (mobileMenuToggle) mobileMenuToggle.setAttribute("aria-expanded", String(nextOpen));
+}
+
+function applyMobileMode() {
   isMobileModeActive = isMobileExperience();
   if (app) app.classList.toggle("mobile-mode", isMobileModeActive);
   if (document.body) document.body.classList.toggle("mobile-mode", isMobileModeActive);
   if (mobileModeBadge) mobileModeBadge.hidden = !isMobileModeActive;
+  if (!isMobileModeActive) closeMobileMenu();
 
   const modeText = isMobileModeActive ? "Mode mobile actif" : "Mode desktop";
   const installText = isPwaStandalone()
@@ -559,6 +587,45 @@ function updateMobileMode() {
       : "Ajouter a l'ecran d'accueil";
   setPwaStatus("PWA prete", modeText, installText);
   if (installPwaBtn) installPwaBtn.hidden = !deferredInstallPrompt || isPwaStandalone();
+}
+
+function updateMobileMode() {
+  applyMobileMode();
+}
+
+function isCssLoaded() {
+  const styleLink = document.querySelector('link[rel="stylesheet"][href*="style.css"]');
+  if (!styleLink) return false;
+  if (!app) return true;
+  const computed = window.getComputedStyle(app);
+  return computed.display === "grid" || computed.display === "block";
+}
+
+function getMobileDebugMessage() {
+  const buttonStatus = [
+    `Envoyer=${Boolean(sendBtn) ? "oui" : "non"}`,
+    `Micro=${Boolean(voiceBtn) ? "oui" : "non"}`,
+    `Menu=${Boolean(mobileMenuToggle) ? "oui" : "non"}`,
+    `Installer=${Boolean(installPwaBtn) ? "oui" : "non"}`
+  ].join(", ");
+
+  return [
+    "Diagnostic mobile JARVIS.",
+    `Largeur ecran : ${window.innerWidth}px.`,
+    `Mode mobile actif : ${isMobileModeActive ? "oui" : "non"}.`,
+    `PWA detectee : ${isPwaStandalone() ? "oui" : "non"}.`,
+    `window.jarvisAPI disponible : ${window.jarvisAPI ? "oui" : "non"}.`,
+    `Service worker actif : ${navigator.serviceWorker && navigator.serviceWorker.controller ? "oui" : "non"}.`,
+    `Boutons principaux : ${buttonStatus}.`,
+    `CSS charge : ${isCssLoaded() ? "oui" : "non"}.`
+  ].join("\n");
+}
+
+function refreshMobileInterface() {
+  applyMobileMode();
+  closeMobileMenu();
+  updateMobileMode();
+  return "Actualisation de l'interface mobile.";
 }
 
 async function registerJarvisServiceWorker() {
@@ -2822,6 +2889,10 @@ async function handleCommand(command) {
     message = getWebStatusMessage();
   } else if (cleanCommand === "deploiement") {
     message = getDeploymentMessage();
+  } else if (cleanCommand === "debug mobile") {
+    message = getMobileDebugMessage();
+  } else if (cleanCommand === "rafraichir mobile") {
+    message = refreshMobileInterface();
   } else if (cleanCommand === "fonctionnalites mobile") {
     message = getMobileFeaturesMessage();
   } else if (cleanCommand === "fonctionnalites desktop") {
@@ -3745,11 +3816,16 @@ function initWelcomeSequence() {
   }, 2600);
 }
 
-sendBtn.addEventListener("click", () => handleCommand(input.value));
-input.addEventListener("keydown", (event) => {
+safeBindElement(sendBtn, "click", () => handleCommand(input ? input.value : ""));
+safeBindElement(input, "keydown", (event) => {
   if (event.key === "Enter") handleCommand(input.value);
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeMobileMenu();
+    return;
+  }
+
   if (!event.ctrlKey || event.altKey || event.metaKey) return;
   const key = event.key.toLowerCase();
 
@@ -3763,71 +3839,72 @@ document.addEventListener("keydown", (event) => {
     toggleMicrophone();
   }
 });
-clearHistoryBtn.addEventListener("click", () => {
+safeBindElement(mobileMenuToggle, "click", toggleMobileMenu);
+safeBindElement(clearHistoryBtn, "click", () => {
   clearHistory();
   respond("Historique vide.");
 });
-showMemoryBtn.addEventListener("click", async () => {
+safeBindElement(showMemoryBtn, "click", async () => {
   const message = await listLocalMemories();
   respondDisplay(message, memoryEntries.length ? "Voici les informations enregistrees dans ma memoire locale." : message);
   addHistory("affiche memoire", message);
 });
-clearMemoryBtn.addEventListener("click", async () => {
+safeBindElement(clearMemoryBtn, "click", async () => {
   const message = await clearLocalMemory();
   respond(message);
   addHistory("vide memoire", message);
 });
-showNotesBtn.addEventListener("click", async () => {
+safeBindElement(showNotesBtn, "click", async () => {
   const message = await listLocalNotes();
   respondDisplay(message, noteEntries.length ? "Voici les notes locales." : message);
   addHistory("affiche notes", message);
 });
-clearNotesBtn.addEventListener("click", async () => {
+safeBindElement(clearNotesBtn, "click", async () => {
   const message = await clearLocalNotes();
   respond(message);
   addHistory("vide notes", message);
 });
-showTasksBtn.addEventListener("click", async () => {
+safeBindElement(showTasksBtn, "click", async () => {
   const message = await listLocalTasks();
   respondDisplay(message, "Voici vos taches en cours.");
   addHistory("mes taches", message);
 });
-showPrioritiesBtn.addEventListener("click", async () => {
+safeBindElement(showPrioritiesBtn, "click", async () => {
   const message = await listLocalPriorities();
   respondDisplay(message, "Voici vos priorites.");
   addHistory("mes priorites", message);
 });
-showRemindersBtn.addEventListener("click", async () => {
+safeBindElement(showRemindersBtn, "click", async () => {
   const message = await listLocalReminders();
   respondDisplay(message, "Voici vos rappels.");
   addHistory("mes rappels", message);
 });
-todayBtn.addEventListener("click", async () => {
+safeBindElement(todayBtn, "click", async () => {
   const message = await buildTodayDashboard();
   respondDisplay(message, "Voici votre tableau de bord du jour, monsieur.");
   addHistory("aujourd'hui", message);
 });
-showBilanBtn.addEventListener("click", async () => {
+safeBindElement(showBilanBtn, "click", async () => {
   const message = await showTodayDailyLog();
   respondDisplay(message, "Voici le resume enregistre pour aujourd'hui.");
   addHistory("resume journee", message);
 });
-eveningRoutineBtn.addEventListener("click", async () => {
+safeBindElement(eveningRoutineBtn, "click", async () => {
   const message = await buildEveningBriefing();
   respondDisplay(message, "Routine du soir lancee. Faisons le point sur la journee.");
   addHistory("routine soir", message);
 });
-showDashboardBtn.addEventListener("click", async () => {
+safeBindElement(showDashboardBtn, "click", async () => {
   const message = await showDashboardSummary();
   respondDisplay(message, "Voici votre dashboard personnel, monsieur.");
   addHistory("dashboard", message);
 });
-showWeeklyBtn.addEventListener("click", async () => {
+safeBindElement(showWeeklyBtn, "click", async () => {
   const message = await showWeeklySummary();
   respondDisplay(message, "Voici votre resume local de la semaine.");
   addHistory("resume semaine", message);
 });
-resetAutomationsBtn.addEventListener("click", async () => {
+safeBindElement(resetAutomationsBtn, "click", async () => {
   const message = await resetAutomationSettingsLocal();
   respond(message);
   addHistory("reset automatisations", message);
@@ -3847,9 +3924,11 @@ document.querySelectorAll("[data-nav-target]").forEach((button) => {
     updateNavState(targetId);
     if (targetId === "app") {
       window.scrollTo({ top: 0, behavior: "smooth" });
+      closeMobileMenu();
       return;
     }
     scrollToPanel(targetId);
+    closeMobileMenu();
   });
 });
 document.querySelectorAll("[data-command-center-tab]").forEach((button) => {
@@ -3858,6 +3937,7 @@ document.querySelectorAll("[data-command-center-tab]").forEach((button) => {
     if (button.closest(".left-sidebar") || button.closest(".top-tabs")) {
       scrollToPanel("command-center-panel");
     }
+    if (button.closest(".left-sidebar")) closeMobileMenu();
   });
 });
 document.querySelectorAll("[data-mode-profile]").forEach((button) => {
@@ -3878,8 +3958,9 @@ document.querySelectorAll("[data-theme-profile]").forEach((button) => {
 });
 document.querySelectorAll("[data-command]").forEach((button) => {
   button.addEventListener("click", () => {
-    input.value = button.dataset.command;
+    if (input) input.value = button.dataset.command;
     handleCommand(button.dataset.command);
+    closeMobileMenu();
   });
 });
 if (installPwaBtn) {
@@ -3899,8 +3980,8 @@ if (commandSearch) {
     });
   });
 }
-voiceBtn.addEventListener("click", toggleMicrophone);
-voiceSelect.addEventListener("change", () => {
+safeBindElement(voiceBtn, "click", toggleMicrophone);
+safeBindElement(voiceSelect, "change", () => {
   const nextIndex = Number(voiceSelect.value);
   selectedVoiceIndex = Number.isFinite(nextIndex) ? nextIndex : 0;
   const selectedVoice = getSelectedVoice();
@@ -3910,35 +3991,35 @@ voiceSelect.addEventListener("change", () => {
   saveSettings("Voix sauvegardee");
   respond("Bien recu monsieur. Voix mise a jour.");
 });
-speechRate.addEventListener("input", () => {
+safeBindElement(speechRate, "input", () => {
   currentSpeechRate = Number(speechRate.value);
   updateVoiceSummary();
 });
-speechRate.addEventListener("change", () => {
+safeBindElement(speechRate, "change", () => {
   saveSettings("Vitesse sauvegardee");
   respond(`Commande executee. Vitesse de parole reglee sur ${currentSpeechRate.toFixed(2)}.`);
 });
-speechPitch.addEventListener("input", () => {
+safeBindElement(speechPitch, "input", () => {
   currentSpeechPitch = Number(speechPitch.value);
   updateVoiceSummary();
 });
-speechPitch.addEventListener("change", () => {
+safeBindElement(speechPitch, "change", () => {
   saveSettings("Pitch sauvegarde");
   respond(`Commande executee. Pitch vocal regle sur ${currentSpeechPitch.toFixed(2)}.`);
 });
-speechVolume.addEventListener("input", () => {
+safeBindElement(speechVolume, "input", () => {
   currentSpeechVolume = Number(speechVolume.value);
   updateVoiceSummary();
 });
-speechVolume.addEventListener("change", () => {
+safeBindElement(speechVolume, "change", () => {
   saveSettings("Volume sauvegarde");
   respond(`Commande executee. Volume vocal regle sur ${currentSpeechVolume.toFixed(2)}.`);
 });
-saveSettingsBtn.addEventListener("click", () => {
+safeBindElement(saveSettingsBtn, "click", () => {
   const saved = saveSettings("Reglages sauvegardes manuellement");
   respond(saved ? "Commande executee. Reglages sauvegardes localement." : "Sauvegarde impossible.", false);
 });
-resetSettingsBtn.addEventListener("click", () => {
+safeBindElement(resetSettingsBtn, "click", () => {
   resetSettingsToDefault(true);
   respond("Commande executee. Parametres remis par defaut.");
 });

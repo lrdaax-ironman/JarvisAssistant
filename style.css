@@ -2907,6 +2907,23 @@ body.mode-night {
   gap: 10px;
 }
 
+.mobile-menu-toggle {
+  display: none;
+  min-height: 44px;
+  border: 1px solid rgba(0, 217, 255, 0.36);
+  border-radius: 14px;
+  color: var(--text);
+  background: rgba(0, 217, 255, 0.08);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.mobile-menu-toggle span {
+  color: var(--cyan-soft);
+  font-size: 1.05rem;
+}
+
 .mini-action-btn {
   min-height: 38px;
   width: 100%;
@@ -2941,6 +2958,18 @@ body.mobile-mode,
   animation-duration: 24s;
 }
 
+.hud-decoration,
+.radar-widget,
+.core-decoration,
+.mini-radar,
+.brand-mark::before,
+.brand-mark::after,
+.core-ring,
+.voice-bars,
+.welcome-core {
+  pointer-events: none;
+}
+
 @media (max-width: 768px) {
   html,
   body {
@@ -2953,17 +2982,20 @@ body.mobile-mode,
     min-height: 100dvh;
     padding: 10px;
     gap: 10px;
+    width: 100%;
+    max-width: 100vw;
   }
 
   .app-header {
     min-height: auto;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 14px;
     gap: 12px;
   }
 
   .app-brand {
     align-items: center;
+    min-width: 0;
   }
 
   .brand-mark {
@@ -2975,14 +3007,25 @@ body.mobile-mode,
     font-size: 1.32rem;
   }
 
+  .mobile-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+  }
+
   .app-header-center {
+    grid-column: 1 / -1;
     justify-content: flex-start;
     gap: 8px;
     overflow-x: auto;
     padding-bottom: 2px;
+    scrollbar-width: thin;
   }
 
   .app-header-right {
+    grid-column: 1 / -1;
     justify-content: space-between;
   }
 
@@ -2990,8 +3033,10 @@ body.mobile-mode,
     display: flex;
     gap: 8px;
     overflow-x: auto;
+    white-space: nowrap;
     padding: 8px;
     scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
   }
 
   .top-tabs button {
@@ -3005,6 +3050,8 @@ body.mobile-mode,
   .main-content {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+    width: 100%;
+    max-width: 100%;
   }
 
   .left-sidebar,
@@ -3015,12 +3062,26 @@ body.mobile-mode,
     position: static;
     grid-column: 1;
     width: 100%;
+    max-width: 100%;
   }
 
   .left-sidebar {
+    position: fixed;
+    inset: 86px 10px auto 10px;
+    z-index: 70;
+    display: none;
+    max-height: calc(100dvh - 108px);
+    overflow-y: auto;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     padding: 12px;
+    background: rgba(5, 15, 24, 0.98);
+    box-shadow: 0 20px 44px rgba(0, 0, 0, 0.46), 0 0 26px rgba(0, 217, 255, 0.14);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-nav-open .left-sidebar {
+    display: grid;
   }
 
   .left-sidebar button {
@@ -3040,19 +3101,36 @@ body.mobile-mode,
     overflow: visible;
   }
 
+  .cards-grid,
+  .status-grid,
+  .modules-grid,
+  .command-grid,
+  .module-grid,
+  .profile-grid,
+  .automation-grid,
+  .analytics-grid,
+  .memory-grid,
+  .organization-grid,
   .command-center-grid,
   .ia-status-grid,
   .ai-action-grid,
   .dashboard-cards,
   .right-sidebar .dashboard-cards {
     grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
   }
 
   .dashboard-card,
   .command-center-card,
   .response-box,
-  .panel {
+  .panel,
+  .module-card,
+  .profile-card {
     border-radius: 16px;
+    width: 100%;
+    max-width: 100%;
+    overflow-wrap: break-word;
   }
 
   .dashboard-card {
@@ -3064,10 +3142,11 @@ body.mobile-mode,
     max-height: 320px;
   }
 
+  .command-bar,
   .console {
     position: sticky;
     bottom: 8px;
-    z-index: 20;
+    z-index: 50;
     grid-template-columns: 1fr;
     gap: 10px;
     padding: 10px;
@@ -3077,15 +3156,36 @@ body.mobile-mode,
     box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.32), 0 0 20px rgba(0, 217, 255, 0.12);
   }
 
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
   .console input,
   .console button,
   .icon-btn {
     min-height: 52px;
     font-size: 0.95rem;
+    width: 100%;
   }
 
   .right-sidebar {
     order: 5;
+  }
+
+  .app.mobile-mode .panel,
+  .app.mobile-mode .response-box,
+  .app.mobile-mode .top-tabs,
+  .app.mobile-mode .right-sidebar {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24), inset 0 0 14px rgba(0, 217, 255, 0.035);
+  }
+
+  .app.mobile-mode .mini-radar,
+  .app.mobile-mode .welcome-core {
+    display: none;
   }
 }
 

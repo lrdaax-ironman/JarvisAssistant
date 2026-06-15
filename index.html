@@ -32,6 +32,11 @@
         </div>
       </div>
 
+      <button id="mobile-menu-toggle" class="mobile-menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false">
+        <span aria-hidden="true">☰</span>
+        Menu
+      </button>
+
       <div class="header-status app-header-center">
         <span class="mode-badge cockpit-mode">MODE STANDARD</span>
         <div class="status-pill" aria-live="polite">
@@ -70,7 +75,7 @@
     </nav>
 
     <main class="hud-grid app-body">
-      <aside class="left-sidebar" aria-label="Navigation principale">
+      <aside id="mobile-navigation" class="left-sidebar" aria-label="Navigation principale">
         <div class="sidebar-title">
           <span>Navigation</span>
           <strong>JARVIS CORE</strong>
@@ -130,6 +135,10 @@
           <li><button type="button" data-command="version mobile">version mobile</button></li>
           <li><button type="button" data-command="mode mobile">mode mobile</button></li>
           <li><button type="button" data-command="installer jarvis">installer jarvis</button></li>
+          <li><button type="button" data-command="statut web">statut web</button></li>
+          <li><button type="button" data-command="deploiement">deploiement</button></li>
+          <li><button type="button" data-command="debug mobile">debug mobile</button></li>
+          <li><button type="button" data-command="rafraichir mobile">rafraichir mobile</button></li>
           <li><button type="button" data-command="fonctionnalites mobile">fonctionnalites mobile</button></li>
           <li><button type="button" data-command="fonctionnalites desktop">fonctionnalites desktop</button></li>
           <li><button type="button" data-command="ferme jarvis">ferme jarvis</button></li>
