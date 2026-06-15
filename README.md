@@ -21,6 +21,8 @@ Commandes utiles :
 version mobile
 mode mobile
 installer jarvis
+statut web
+deploiement
 fonctionnalites mobile
 fonctionnalites desktop
 ```
@@ -31,6 +33,59 @@ Notes :
 - Les commandes Windows restent reservees a Electron.
 - Ollama local reste disponible sur le desktop. Une passerelle mobile pourra etre ajoutee plus tard.
 - Le service worker est enregistre uniquement en contexte web `http` ou `https`, pas en `file://` Electron.
+
+## Deploiement web
+
+Depuis la V4.1, JARVIS est prepare pour un deploiement statique sur Vercel ou Netlify.
+
+Fichiers web attendus a la racine :
+
+- `index.html`
+- `style.css`
+- `voice.css`
+- `script.js`
+- `manifest.json`
+- `service-worker.js`
+- `assets/icons/icon-192.png`
+- `assets/icons/icon-512.png`
+- `vercel.json`
+- `netlify.toml`
+
+### Vercel
+
+Le fichier `vercel.json` sert l'application comme site statique.
+
+Deploiement possible :
+
+```powershell
+vercel
+```
+
+Ou via l'interface Vercel en connectant le repository GitHub.
+
+### Netlify
+
+Le fichier `netlify.toml` publie le dossier courant :
+
+```toml
+[build]
+  publish = "."
+```
+
+Netlify peut aussi etre connecte directement au repository GitHub.
+
+### Limites de la version web
+
+- Les commandes Windows sont uniquement disponibles dans Electron.
+- Ollama local est disponible sur la version desktop.
+- Les handlers Electron ne sont pas disponibles dans un navigateur web.
+- La version web reste stable meme si `window.jarvisAPI` est absent.
+- Les commandes `statut web` et `deploiement` expliquent le mode actif et les limites.
+
+### Difference desktop / web mobile
+
+- Desktop Electron : Ollama local, commandes Windows, memoire Electron et automatisations locales.
+- Web/PWA mobile : interface tactile, commandes texte compatibles, installation sur l'ecran d'accueil et messages propres pour les fonctions desktop.
 
 ## Reconnaissance vocale locale
 
