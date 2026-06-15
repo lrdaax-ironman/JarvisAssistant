@@ -23,6 +23,8 @@ mode mobile
 installer jarvis
 statut web
 deploiement
+debug mobile
+rafraichir mobile
 fonctionnalites mobile
 fonctionnalites desktop
 ```
@@ -33,6 +35,7 @@ Notes :
 - Les commandes Windows restent reservees a Electron.
 - Ollama local reste disponible sur le desktop. Une passerelle mobile pourra etre ajoutee plus tard.
 - Le service worker est enregistre uniquement en contexte web `http` ou `https`, pas en `file://` Electron.
+- Si le mobile garde un ancien rendu, utiliser `debug mobile`, puis `rafraichir mobile`. Le service worker utilise une strategie network-first pour `style.css`, `voice.css` et `script.js`.
 
 ## Deploiement web
 

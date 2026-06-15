@@ -1,4 +1,5 @@
-const CACHE_NAME = "jarvis-assistant-v4-1";
+const CACHE_NAME = "jarvis-cache-v4-1-mobile-fix";
+const NETWORK_FIRST_ASSETS = ["style.css", "script.js", "voice.css"];
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -40,8 +41,22 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
+  const requestUrl = new URL(event.request.url);
+  const assetName = requestUrl.pathname.split("/").pop();
+  const isNetworkFirstAsset = NETWORK_FIRST_ASSETS.includes(assetName);
+
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
+    (isNetworkFirstAsset
+      ? fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.ok) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request))
+      : caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) return cachedResponse;
 
       return fetch(event.request)
@@ -52,6 +67,6 @@ self.addEventListener("fetch", (event) => {
           return networkResponse;
         })
         .catch(() => caches.match("./index.html"));
-    })
+    }))
   );
 });
