@@ -156,7 +156,7 @@ const SETTINGS_STORAGE_KEY = "jarvisAssistant.settings.v2";
 const HISTORY_STORAGE_KEY = "jarvisAssistant.history.v2";
 const HISTORY_LIMIT = 20;
 const LOCAL_AI_MODEL = "llama3.2:3b";
-const APP_VERSION = "V4.0";
+const APP_VERSION = "V4.1";
 const DEFAULT_SETTINGS = {
   voiceName: "",
   voiceLang: "",
@@ -408,6 +408,8 @@ const availableCommands = [
   "version mobile",
   "mode mobile",
   "installer jarvis",
+  "statut web",
+  "deploiement",
   "fonctionnalites mobile",
   "fonctionnalites desktop",
   "reduis animations",
@@ -596,7 +598,7 @@ async function requestPwaInstall() {
 
 function getMobileVersionMessage() {
   return [
-    "Version mobile V4.0 : JARVIS peut etre ouvert dans un navigateur mobile et ajoute a l'ecran d'accueil.",
+    `Version mobile ${APP_VERSION} : JARVIS peut etre ouvert dans un navigateur mobile et ajoute a l'ecran d'accueil.`,
     `Mode mobile : ${isMobileModeActive ? "actif" : "inactif"}.`,
     `PWA : ${isPwaStandalone() ? "installee" : deferredInstallPrompt ? "installable" : "prete, selon le navigateur"}.`,
     "Les commandes desktop affichent un message propre sur mobile."
@@ -615,6 +617,25 @@ function getDesktopFeaturesMessage() {
     "Fonctionnalites desktop : Ollama local, commandes Windows, dossiers, calculatrice, navigateur, plein ecran Electron, minimisation, memoire locale Electron et automatisations.",
     "La version mobile garde l'interface et les commandes compatibles, avec messages propres pour le reste."
   ].join("\n");
+}
+
+function getWebStatusMessage() {
+  return isDesktopElectron()
+    ? "Vous utilisez la version desktop de JARVIS."
+    : "Vous utilisez la version web/mobile de JARVIS.";
+}
+
+function getDeploymentMessage() {
+  return [
+    "Deploiement web : la version web de JARVIS peut etre deployee sur Vercel ou Netlify comme application statique.",
+    "Les fichiers essentiels sont a la racine : index.html, style.css, script.js, manifest.json et service-worker.js.",
+    "Les fonctions desktop, Ollama local et commandes Windows restent reservees a Electron.",
+    "Sur navigateur web/mobile, JARVIS affiche des messages propres si une fonction desktop est indisponible."
+  ].join("\n");
+}
+
+function getDesktopOnlyMessage() {
+  return "Cette fonctionnalite est disponible uniquement sur la version desktop.";
 }
 
 function getAiApi() {
@@ -643,6 +664,10 @@ function getAutomationApi() {
 
 function getPreferencesApi() {
   return aiApi && typeof aiApi.getPreferences === "function" ? aiApi : null;
+}
+
+function getVoiceTranscriptionApi() {
+  return window.jarvisAPI && typeof window.jarvisAPI.transcribeVoice === "function" ? window.jarvisAPI : null;
 }
 
 function getLocalDateKey(date = new Date()) {
@@ -2005,7 +2030,7 @@ async function askAiForCommand(command, historyCommand = command) {
 async function runDesktopAction(methodName, successMessage, ...args) {
   const desktop = getDesktopApi();
   if (!desktop || typeof desktop[methodName] !== "function") {
-    return "Cette commande est disponible uniquement sur la version desktop.";
+    return getDesktopOnlyMessage();
   }
 
   try {
@@ -2793,6 +2818,10 @@ async function handleCommand(command) {
       : "Mode mobile pret. Il s'activera automatiquement sur ecran mobile.";
   } else if (cleanCommand === "installer jarvis") {
     message = await requestPwaInstall();
+  } else if (cleanCommand === "statut web") {
+    message = getWebStatusMessage();
+  } else if (cleanCommand === "deploiement") {
+    message = getDeploymentMessage();
   } else if (cleanCommand === "fonctionnalites mobile") {
     message = getMobileFeaturesMessage();
   } else if (cleanCommand === "fonctionnalites desktop") {
@@ -3323,7 +3352,7 @@ async function handleCommand(command) {
   } else if (cleanCommand === "infos systeme") {
     const desktop = getDesktopApi();
     if (!desktop || typeof desktop.getSystemInfo !== "function") {
-      message = "Cette commande est disponible uniquement sur la version desktop.";
+      message = getDesktopOnlyMessage();
     } else {
       try {
         message = `Bien recu monsieur. ${formatSystemInfo(await desktop.getSystemInfo())}`;
@@ -3340,7 +3369,7 @@ async function handleCommand(command) {
   } else if (cleanCommand === "ferme jarvis") {
     const desktop = getDesktopApi();
     if (!desktop || typeof desktop.closeApp !== "function") {
-      message = "Cette commande est disponible uniquement sur la version desktop.";
+      message = getDesktopOnlyMessage();
     } else {
       message = "Bien recu monsieur. Fermeture de JARVIS.";
       respond(message);
@@ -3364,7 +3393,7 @@ async function handleCommand(command) {
 }
 
 function hasLocalTranscriptionApi() {
-  return Boolean(window.jarvisAPI && typeof window.jarvisAPI.transcribeVoice === "function");
+  return Boolean(getVoiceTranscriptionApi());
 }
 
 async function testMicro(shouldRespond = true) {
@@ -3617,7 +3646,12 @@ async function startLocalVoiceTranscription() {
   respond("Ecoute locale en cours...", false);
 
   try {
-    const result = await window.jarvisAPI.transcribeVoice();
+    const voiceApi = getVoiceTranscriptionApi();
+    if (!voiceApi) {
+      throw new Error("transcribeVoice indisponible");
+    }
+
+    const result = await voiceApi.transcribeVoice();
     const text = typeof result === "string" ? result.trim() : String((result && result.text) || "").trim();
     const message = result && typeof result === "object" && result.message ? result.message : "Transcription terminee.";
 

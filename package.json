@@ -1,6 +1,6 @@
 {
   "name": "jarvis-assistant",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Application desktop Windows JARVIS Assistant en HTML, CSS et JavaScript vanilla avec Electron.",
   "main": "main.js",
   "private": true,
@@ -29,6 +29,8 @@
       "preload.js",
       "manifest.json",
       "service-worker.js",
+      "vercel.json",
+      "netlify.toml",
       "assets/icons/**/*",
       "voice/**/*",
       "README.md",
