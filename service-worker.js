@@ -1,11 +1,14 @@
-const CACHE_NAME = "jarvis-cache-v4-1-mobile-fix";
-const NETWORK_FIRST_ASSETS = ["style.css", "script.js", "voice.css"];
+const CACHE_NAME = "jarvis-mobile-v1";
+const NETWORK_FIRST_ASSETS = ["style.css", "script.js", "voice.css", "mobile.css", "mobile.js"];
 const CORE_ASSETS = [
   "./",
   "./index.html",
+  "./mobile.html",
   "./style.css",
   "./voice.css",
   "./script.js",
+  "./mobile.css",
+  "./mobile.js",
   "./manifest.json",
   "./vercel.json",
   "./netlify.toml",
@@ -44,6 +47,10 @@ self.addEventListener("fetch", (event) => {
   const requestUrl = new URL(event.request.url);
   const assetName = requestUrl.pathname.split("/").pop();
   const isNetworkFirstAsset = NETWORK_FIRST_ASSETS.includes(assetName);
+  const offlineResponse = () => new Response("", { status: 504, statusText: "Offline" });
+  const navigationFallback = () => caches.match("./mobile.html")
+    .then((fallback) => fallback || caches.match("./index.html"))
+    .then((fallback) => fallback || offlineResponse());
 
   event.respondWith(
     (isNetworkFirstAsset
@@ -55,7 +62,7 @@ self.addEventListener("fetch", (event) => {
           }
           return networkResponse;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request).then((cachedResponse) => cachedResponse || offlineResponse()))
       : caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) return cachedResponse;
 
@@ -66,7 +73,10 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
           return networkResponse;
         })
-        .catch(() => caches.match("./index.html"));
+        .catch(() => {
+          if (event.request.mode === "navigate") return navigationFallback();
+          return caches.match(event.request).then((fallback) => fallback || offlineResponse());
+        });
     }))
   );
 });
