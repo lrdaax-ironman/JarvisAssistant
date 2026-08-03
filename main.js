@@ -3,9 +3,11 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
+const { createJarvisBridge } = require("./bridge-server");
 
 const APP_TITLE = "JARVIS Assistant";
 const OLLAMA_URL = "http://localhost:11434/api/chat";
+const OLLAMA_STATUS_URL = "http://localhost:11434/api/tags";
 const OLLAMA_MODEL = "llama3.2:3b";
 const OLLAMA_UNAVAILABLE_MESSAGE = "Ollama ne semble pas lancé. Ouvrez Ollama ou lancez la commande ollama serve.";
 const OLLAMA_MODEL_MISSING_MESSAGE = "Le modèle IA local n’est pas disponible. Installez-le avec : ollama pull llama3.2:3b";
@@ -52,6 +54,7 @@ const EMPTY_MEMORY_DATA = {
   automations: DEFAULT_AUTOMATION_SETTINGS,
   preferences: DEFAULT_PREFERENCES
 };
+let jarvisBridge = null;
 
 app.commandLine.appendSwitch("enable-features", "MediaStream");
 
@@ -982,23 +985,10 @@ function getOllamaConfig() {
 
 async function getOllamaStatus() {
   try {
-    const response = await fetch(OLLAMA_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        stream: false,
-        messages: [
-          {
-            role: "system",
-            content: "Réponds uniquement par : Ollama connecté."
-          },
-          {
-            role: "user",
-            content: "statut"
-          }
-        ]
-      })
+    const response = await fetch(OLLAMA_STATUS_URL, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(5000)
     });
 
     const responseText = await response.text();
@@ -1014,6 +1004,16 @@ async function getOllamaStatus() {
       return {
         ok: false,
         message: isMissingOllamaModel(errorText) ? OLLAMA_MODEL_MISSING_MESSAGE : "Ollama indisponible pour le moment."
+      };
+    }
+
+    const models = payload && Array.isArray(payload.models) ? payload.models : [];
+    const modelInstalled = models.some((item) => item && (item.name === OLLAMA_MODEL || item.model === OLLAMA_MODEL));
+    if (!modelInstalled) {
+      return {
+        ok: false,
+        model: OLLAMA_MODEL,
+        message: OLLAMA_MODEL_MISSING_MESSAGE
       };
     }
 
@@ -1232,6 +1232,36 @@ function registerAiIpcHandlers() {
   ipcMain.handle("preferences:get", () => getPreferences());
   ipcMain.handle("preferences:update", (_event, key, value) => updatePreference(key, value));
   ipcMain.handle("preferences:reset", () => resetPreferences());
+  ipcMain.handle("bridge:get-status", () => jarvisBridge
+    ? jarvisBridge.getStatus()
+    : { ok: false, running: false, addresses: [], pairingCode: "", connectedDevices: 0 });
+  ipcMain.handle("bridge:rotate-code", () => jarvisBridge
+    ? jarvisBridge.rotatePairingCode()
+    : { ok: false, running: false, message: "Bridge JARVIS indisponible." });
+}
+
+async function startJarvisBridge() {
+  jarvisBridge = createJarvisBridge({
+    rootDir: __dirname,
+    version: app.getVersion(),
+    model: OLLAMA_MODEL,
+    askAi: askJarvisOllama,
+    getOllamaStatus,
+    readData: readMemoryData,
+    addMemory,
+    addNote,
+    addTask,
+    completeTask,
+    addReminder,
+    addPlanningItem
+  });
+
+  try {
+    return await jarvisBridge.start();
+  } catch (error) {
+    console.error("[JARVIS Bridge] Demarrage impossible:", error);
+    return jarvisBridge.getStatus();
+  }
 }
 
 function registerDesktopIpcHandlers() {
@@ -1323,10 +1353,11 @@ function createMainWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   configurePermissions();
   registerAiIpcHandlers();
   registerDesktopIpcHandlers();
+  await startJarvisBridge();
   createMainWindow();
 
   app.on("activate", () => {
@@ -1334,6 +1365,12 @@ app.whenReady().then(() => {
       createMainWindow();
     }
   });
+});
+
+app.on("before-quit", () => {
+  if (jarvisBridge) {
+    jarvisBridge.stop().catch((error) => console.error("[JARVIS Bridge] Arret incomplet:", error));
+  }
 });
 
 app.on("window-all-closed", () => {

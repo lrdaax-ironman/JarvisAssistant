@@ -4,7 +4,7 @@ Application desktop Electron locale avec interface JARVIS, Ollama, memoire, orga
 
 ## Version PWA mobile
 
-Depuis la V4.1.1 corrective, JARVIS dispose d'une vraie version mobile dediee, separee de l'interface desktop Electron.
+Depuis la V4.2, JARVIS dispose d'une version mobile dediee avec deux fonctionnements : autonome sur le web, ou reliee au desktop par le Bridge local.
 
 Fichiers PWA :
 
@@ -42,17 +42,50 @@ debug mobile
 rafraichir mobile
 fonctionnalites mobile
 fonctionnalites desktop
+bridge statut
+adresse bridge
+code bridge
+aide bridge
 ```
 
 Notes :
 
 - La version desktop Electron continue de fonctionner avec `npm.cmd start`.
 - Les commandes Windows restent reservees a Electron.
-- Ollama local reste disponible sur le desktop. Une passerelle mobile pourra etre ajoutee plus tard.
+- Ollama local est accessible au telephone quand la page mobile est ouverte depuis le Bridge JARVIS sur le meme reseau Wi-Fi.
 - La version mobile utilise `localStorage` pour les notes, taches, rappels, planning, memoire et preferences simples.
 - `mobile.js` ne depend pas de `window.jarvisAPI` et reste stable dans un navigateur mobile.
 - Le service worker est enregistre uniquement en contexte web `http` ou `https`, pas en `file://` Electron.
-- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v1` met en cache `mobile.html`, `mobile.css`, `mobile.js` et les fichiers desktop essentiels.
+- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v2` utilise une strategie network-first pour les fichiers d'interface.
+
+## Bridge local V4.2
+
+Le Bridge relie un telephone a JARVIS desktop sans API externe. Il est lance automatiquement avec Electron et reste limite au reseau local.
+
+Utilisation :
+
+1. Connecter le PC et le telephone au meme Wi-Fi.
+2. Dans JARVIS desktop, taper `adresse bridge`.
+3. Ouvrir l'adresse affichee sur le telephone.
+4. Taper `code bridge` sur le PC, puis saisir les six chiffres sur le telephone.
+
+Une fois associe, le telephone peut :
+
+- consulter les taches, notes, rappels, planning et memoires du desktop ;
+- ajouter des elements aux donnees locales du PC ;
+- terminer une tache ;
+- envoyer des questions naturelles a Ollama sur le PC ;
+- synchroniser les compteurs sans cloud.
+
+Securite :
+
+- le code d'association change apres utilisation ;
+- la session expire automatiquement ;
+- les origines web externes sont refusees ;
+- les commandes Windows, les fichiers et le controle de la fenetre ne sont jamais exposes par le Bridge ;
+- la version Vercel reste autonome et ne tente pas de contourner les protections HTTPS du navigateur.
+
+La page Bridge utilise une adresse locale en `http://`. Selon le navigateur, l'installation PWA et le service worker peuvent exiger HTTPS ; la connexion Bridge reste utilisable dans l'onglet mobile, tandis que la PWA installable reste disponible sur Vercel.
 
 ## Deploiement web
 

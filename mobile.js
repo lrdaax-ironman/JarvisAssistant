@@ -1,6 +1,7 @@
 (() => {
-  const APP_VERSION = "4.1.1 mobile";
+  const APP_VERSION = "4.2.0 mobile";
   const STORAGE_PREFIX = "jarvis-mobile:";
+  const BRIDGE_TOKEN_KEY = `${STORAGE_PREFIX}bridge-token`;
   const STORE = {
     tasks: `${STORAGE_PREFIX}tasks`,
     notes: `${STORAGE_PREFIX}notes`,
@@ -18,8 +19,24 @@
   const installPanel = $("install-panel");
   const installButton = $("install-button");
   const pwaState = $("pwa-state");
+  const bridgeState = $("bridge-state");
+  const bridgeDetail = $("bridge-detail");
+  const bridgeCodeLabel = $("bridge-code-label");
+  const bridgeCodeInput = $("bridge-code");
+  const bridgePairButton = $("bridge-pair-button");
+  const bridgeSyncButton = $("bridge-sync-button");
+  const bridgeDisconnectButton = $("bridge-disconnect-button");
+  const bridgeSummaryState = $("bridge-summary-state");
+  const ollamaMobileState = $("ollama-mobile-state");
+  const aiMobileState = $("ai-mobile-state");
+  const storageState = $("storage-state");
 
   let deferredInstallPrompt = null;
+  let bridgeAvailable = false;
+  let bridgeAuthenticated = false;
+  let bridgeData = null;
+  let bridgeSummary = null;
+  let bridgeToken = "";
 
   function normalize(value) {
     return String(value || "")
@@ -29,6 +46,15 @@
       .toLowerCase()
       .trim()
       .replace(/\s+/g, " ");
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
   function readJson(key, fallback) {
@@ -49,16 +75,41 @@
       return true;
     } catch (error) {
       console.warn("JARVIS mobile storage write error", error);
-      setResponse("Stockage indisponible", "Le navigateur refuse le stockage local. Les donnees mobiles ne peuvent pas etre sauvegardees pour le moment.");
+      setResponse("Stockage indisponible", "Le navigateur refuse le stockage local pour le moment.");
       return false;
     }
   }
 
-  function getItems(type) {
+  function readBridgeToken() {
+    try {
+      return localStorage.getItem(BRIDGE_TOKEN_KEY) || "";
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function saveBridgeToken(token) {
+    bridgeToken = String(token || "");
+    try {
+      if (bridgeToken) localStorage.setItem(BRIDGE_TOKEN_KEY, bridgeToken);
+      else localStorage.removeItem(BRIDGE_TOKEN_KEY);
+    } catch (_error) {
+      bridgeToken = "";
+    }
+  }
+
+  function getLocalItems(type) {
     return readJson(STORE[type], []);
   }
 
-  function saveItems(type, items) {
+  function getItems(type) {
+    if (bridgeAuthenticated && bridgeData && Array.isArray(bridgeData[type])) {
+      return bridgeData[type];
+    }
+    return getLocalItems(type);
+  }
+
+  function saveLocalItems(type, items) {
     return writeJson(STORE[type], items);
   }
 
@@ -88,21 +139,15 @@
     setStatus("Pret");
   }
 
-  function escapeHtml(value) {
-    return String(value || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
   function formatList(items, emptyText) {
     if (!items.length) return [emptyText];
-    return items.slice(-8).reverse().map((item) => {
-      const done = item.done || item.status === "completed" ? " [termine]" : "";
-      return `${item.content || item.title}${done}`;
-    });
+    return [...items]
+      .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")))
+      .slice(0, 8)
+      .map((item) => {
+        const done = item.done || item.status === "completed" ? " [termine]" : "";
+        return `${item.content || item.title}${done}`;
+      });
   }
 
   function updateCounts() {
@@ -111,11 +156,10 @@
     const reminders = getItems("reminders");
     const planning = getItems("planning");
     const memories = getItems("memories");
-
     const counters = {
       "tasks-count": `${tasks.filter((task) => task.status !== "completed").length} en cours`,
       "notes-count": `${notes.length} note${notes.length > 1 ? "s" : ""}`,
-      "reminders-count": `${reminders.length} rappel${reminders.length > 1 ? "s" : ""}`,
+      "reminders-count": `${reminders.filter((item) => !item.done).length} rappel${reminders.length > 1 ? "s" : ""}`,
       "planning-count": `${planning.length} entree${planning.length > 1 ? "s" : ""}`,
       "memory-count": `${memories.length} memoire${memories.length > 1 ? "s" : ""}`
     };
@@ -124,6 +168,386 @@
       const element = $(id);
       if (element) element.textContent = text;
     });
+  }
+
+  function updateBridgeUi() {
+    if (!bridgeState || !bridgeDetail) return;
+
+    if (!bridgeAvailable) {
+      bridgeState.textContent = "Hors ligne";
+      bridgeState.dataset.tone = "error";
+      bridgeDetail.textContent = "Ouvrez sur ce telephone l'adresse donnee par la commande adresse bridge sur le PC.";
+      if (bridgeCodeLabel) bridgeCodeLabel.hidden = true;
+      if (bridgeCodeInput) {
+        bridgeCodeInput.hidden = true;
+        bridgeCodeInput.disabled = true;
+      }
+      if (bridgePairButton) bridgePairButton.hidden = true;
+      if (bridgeSyncButton) bridgeSyncButton.hidden = true;
+      if (bridgeDisconnectButton) bridgeDisconnectButton.hidden = true;
+      if (bridgeSummaryState) bridgeSummaryState.textContent = "Hors ligne";
+      if (ollamaMobileState) ollamaMobileState.textContent = "Desktop";
+      if (aiMobileState) aiMobileState.textContent = "Bridge PC requis";
+      if (storageState) storageState.textContent = "localStorage";
+      return;
+    }
+
+    if (!bridgeAuthenticated) {
+      bridgeState.textContent = "Association requise";
+      bridgeState.dataset.tone = "pairing";
+      bridgeDetail.textContent = "Saisissez le code temporaire affiche par JARVIS desktop.";
+      if (bridgeCodeLabel) bridgeCodeLabel.hidden = false;
+      if (bridgeCodeInput) {
+        bridgeCodeInput.hidden = false;
+        bridgeCodeInput.disabled = false;
+      }
+      if (bridgePairButton) bridgePairButton.hidden = false;
+      if (bridgeSyncButton) bridgeSyncButton.hidden = true;
+      if (bridgeDisconnectButton) bridgeDisconnectButton.hidden = true;
+      if (bridgeSummaryState) bridgeSummaryState.textContent = "A associer";
+      if (ollamaMobileState) ollamaMobileState.textContent = "En attente";
+      if (aiMobileState) aiMobileState.textContent = "Association requise";
+      if (storageState) storageState.textContent = "localStorage";
+      return;
+    }
+
+    bridgeState.textContent = "Connecte";
+    bridgeState.dataset.tone = "connected";
+    bridgeDetail.textContent = "Connexion locale chiffree par jeton. Les echanges restent sur votre reseau Wi-Fi.";
+    if (bridgeCodeLabel) bridgeCodeLabel.hidden = true;
+    if (bridgeCodeInput) bridgeCodeInput.hidden = true;
+    if (bridgePairButton) bridgePairButton.hidden = true;
+    if (bridgeSyncButton) bridgeSyncButton.hidden = false;
+    if (bridgeDisconnectButton) bridgeDisconnectButton.hidden = false;
+    if (bridgeSummaryState) bridgeSummaryState.textContent = "Connecte";
+    if (storageState) storageState.textContent = "PC local";
+
+    const ollamaConnected = Boolean(bridgeSummary && bridgeSummary.ollama && bridgeSummary.ollama.ok);
+    if (ollamaMobileState) ollamaMobileState.textContent = ollamaConnected ? "Connecte" : "Indisponible";
+    if (aiMobileState) aiMobileState.textContent = ollamaConnected ? "Ollama via Bridge" : "Ollama indisponible";
+  }
+
+  async function bridgeRequest(pathname, options = {}) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs || 8000);
+    const headers = { Accept: "application/json" };
+    const authenticate = options.authenticate !== false;
+
+    if (options.body !== undefined) headers["Content-Type"] = "application/json";
+    if (authenticate && bridgeToken) headers.Authorization = `Bearer ${bridgeToken}`;
+
+    try {
+      const response = await fetch(pathname, {
+        method: options.method || "GET",
+        headers,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        cache: "no-store",
+        signal: controller.signal
+      });
+      const text = await response.text();
+      let payload = {};
+      try {
+        payload = text ? JSON.parse(text) : {};
+      } catch (_error) {
+        throw new Error("Reponse Bridge invalide.");
+      }
+
+      if (!response.ok || payload.ok === false) {
+        if (response.status === 401 && authenticate) {
+          bridgeAuthenticated = false;
+          bridgeData = null;
+          bridgeSummary = null;
+          saveBridgeToken("");
+          updateBridgeUi();
+          updateCounts();
+        }
+        throw new Error(payload.message || `Erreur Bridge ${response.status}.`);
+      }
+      return payload;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
+  async function detectBridge() {
+    bridgeToken = readBridgeToken();
+    try {
+      const status = await bridgeRequest("/bridge/status", {
+        authenticate: Boolean(bridgeToken),
+        timeoutMs: 3500
+      });
+      if (!status.bridge) throw new Error("Bridge absent");
+      bridgeAvailable = true;
+      bridgeAuthenticated = Boolean(status.authenticated && bridgeToken);
+      updateBridgeUi();
+      if (bridgeAuthenticated) await syncBridgeData(false);
+    } catch (_error) {
+      bridgeAvailable = false;
+      bridgeAuthenticated = false;
+      bridgeData = null;
+      bridgeSummary = null;
+      updateBridgeUi();
+      updateCounts();
+    }
+  }
+
+  async function pairBridge() {
+    const code = String(bridgeCodeInput ? bridgeCodeInput.value : "").trim();
+    if (!/^\d{6}$/.test(code)) {
+      setResponse("Code incomplet", "Saisissez les 6 chiffres affiches sur JARVIS desktop.");
+      return;
+    }
+
+    setStatus("Association");
+    if (bridgePairButton) bridgePairButton.disabled = true;
+    try {
+      const result = await bridgeRequest("/bridge/pair", {
+        method: "POST",
+        body: { code },
+        authenticate: false
+      });
+      saveBridgeToken(result.token);
+      bridgeAuthenticated = true;
+      if (bridgeCodeInput) bridgeCodeInput.value = "";
+      await syncBridgeData(false);
+      setResponse("Bridge connecte", "JARVIS mobile est maintenant relie a votre application desktop locale.");
+    } catch (error) {
+      setResponse("Association impossible", error.message || "Verifiez le code affiche sur le PC.");
+    } finally {
+      if (bridgePairButton) bridgePairButton.disabled = false;
+      updateBridgeUi();
+    }
+  }
+
+  async function syncBridgeData(showResponse = true) {
+    if (!bridgeAvailable || !bridgeAuthenticated) {
+      if (showResponse) setResponse("Bridge non connecte", "Associez d'abord ce telephone avec JARVIS desktop.");
+      return false;
+    }
+
+    setStatus("Synchronisation");
+    try {
+      const [dataResult, summaryResult] = await Promise.all([
+        bridgeRequest("/bridge/data"),
+        bridgeRequest("/bridge/summary", { timeoutMs: 45000 })
+      ]);
+      bridgeData = dataResult.data || null;
+      bridgeSummary = summaryResult.summary || null;
+      updateCounts();
+      updateBridgeUi();
+      if (showResponse) {
+        const counts = bridgeSummary && bridgeSummary.counts ? bridgeSummary.counts : {};
+        setResponse("Synchronisation terminee", "Les donnees desktop sont a jour sur ce telephone.", [
+          `${Number(counts.tasks) || 0} tache(s) en cours`,
+          `${Number(counts.reminders) || 0} rappel(s) actif(s)`,
+          `${Number(counts.notes) || 0} note(s)`,
+          `${Number(counts.memories) || 0} memoire(s)`
+        ]);
+      }
+      return true;
+    } catch (error) {
+      setResponse("Synchronisation impossible", error.message || "Le PC ne repond plus.");
+      return false;
+    }
+  }
+
+  function disconnectBridge() {
+    bridgeAuthenticated = false;
+    bridgeData = null;
+    bridgeSummary = null;
+    saveBridgeToken("");
+    updateBridgeUi();
+    updateCounts();
+    setResponse("Bridge deconnecte", "Les donnees mobiles locales sont de nouveau utilisees.");
+  }
+
+  async function writeBridge(pathname, body) {
+    const result = await bridgeRequest(pathname, { method: "POST", body });
+    await syncBridgeData(false);
+    return result;
+  }
+
+  async function askBridgeAi(message) {
+    if (!bridgeAuthenticated) {
+      setResponse("IA desktop non connectee", "Ouvrez l'adresse Bridge affichee sur le PC puis associez ce telephone.");
+      return;
+    }
+
+    setStatus("IA en reflexion");
+    try {
+      const result = await bridgeRequest("/bridge/ai", {
+        method: "POST",
+        body: { message },
+        timeoutMs: 120000
+      });
+      setResponse("Reponse JARVIS", result.response || "Aucune reponse recue.");
+    } catch (error) {
+      setResponse("IA indisponible", error.message || "Ollama ne repond pas sur le PC.");
+    }
+  }
+
+  async function addTask(text) {
+    if (!text) return setResponse("Tache vide", "Precisez le contenu de la tache.");
+    if (bridgeAuthenticated) {
+      try {
+        await writeBridge("/bridge/tasks", { title: text, options: { priority: "normal" } });
+        setResponse("Tache ajoutee", "Tache enregistree sur JARVIS desktop.", [text]);
+      } catch (error) {
+        setResponse("Ajout impossible", error.message);
+      }
+      return;
+    }
+    const tasks = getLocalItems("tasks");
+    tasks.unshift(createItem(text, { status: "todo" }));
+    saveLocalItems("tasks", tasks);
+    updateCounts();
+    setResponse("Tache ajoutee", "Tache enregistree dans le stockage mobile.", [text]);
+  }
+
+  async function completeTask(query) {
+    const normalizedQuery = normalize(query);
+    const tasks = getItems("tasks");
+    const task = tasks.find((item) => normalize(item.content || item.title).includes(normalizedQuery) && item.status !== "completed");
+    if (!task) return setResponse("Tache introuvable", "Aucune tache ne correspond a votre recherche.");
+
+    if (bridgeAuthenticated) {
+      try {
+        await writeBridge("/bridge/tasks/complete", { id: task.id });
+        setResponse("Tache terminee", "La tache desktop est maintenant terminee.", [task.title]);
+      } catch (error) {
+        setResponse("Action impossible", error.message);
+      }
+      return;
+    }
+
+    task.status = "completed";
+    task.completedAt = new Date().toISOString();
+    saveLocalItems("tasks", tasks);
+    updateCounts();
+    setResponse("Tache terminee", "La tache mobile est maintenant terminee.", [task.content || task.title]);
+  }
+
+  async function addNote(text) {
+    if (!text) return setResponse("Note vide", "Precisez le contenu de la note.");
+    if (bridgeAuthenticated) {
+      try {
+        await writeBridge("/bridge/notes", { content: text });
+        setResponse("Note enregistree", "Note ajoutee sur JARVIS desktop.", [text]);
+      } catch (error) {
+        setResponse("Ajout impossible", error.message);
+      }
+      return;
+    }
+    const notes = getLocalItems("notes");
+    notes.unshift(createItem(text));
+    saveLocalItems("notes", notes);
+    updateCounts();
+    setResponse("Note enregistree", "Note ajoutee au stockage mobile.", [text]);
+  }
+
+  async function addReminder(text) {
+    if (!text) return setResponse("Rappel vide", "Precisez le contenu du rappel.");
+    if (bridgeAuthenticated) {
+      try {
+        await writeBridge("/bridge/reminders", { title: text, remindAt: null });
+        setResponse("Rappel ajoute", "Rappel enregistre sur JARVIS desktop.", [text]);
+      } catch (error) {
+        setResponse("Ajout impossible", error.message);
+      }
+      return;
+    }
+    const reminders = getLocalItems("reminders");
+    reminders.unshift(createItem(text, { done: false }));
+    saveLocalItems("reminders", reminders);
+    updateCounts();
+    setResponse("Rappel ajoute", "Rappel simple enregistre sur ce telephone.", [text]);
+  }
+
+  async function addPlanning(text) {
+    if (!text) return setResponse("Planning vide", "Precisez l'element de planning.");
+    if (bridgeAuthenticated) {
+      const date = new Date().toISOString().slice(0, 10);
+      try {
+        await writeBridge("/bridge/planning", { item: { title: text, date, time: null, type: "other" } });
+        setResponse("Planning mis a jour", "Element ajoute sur JARVIS desktop.", [text]);
+      } catch (error) {
+        setResponse("Ajout impossible", error.message);
+      }
+      return;
+    }
+    const planning = getLocalItems("planning");
+    planning.unshift(createItem(text));
+    saveLocalItems("planning", planning);
+    updateCounts();
+    setResponse("Planning mis a jour", "Element ajoute au planning mobile.", [text]);
+  }
+
+  async function addMemory(text) {
+    if (!text) return setResponse("Memoire vide", "Precisez l'information a memoriser.");
+    if (bridgeAuthenticated) {
+      try {
+        await writeBridge("/bridge/memories", { content: text, category: "general" });
+        setResponse("Memoire ajoutee", "Information enregistree sur JARVIS desktop.", [text]);
+      } catch (error) {
+        setResponse("Ajout impossible", error.message);
+      }
+      return;
+    }
+    const memories = getLocalItems("memories");
+    memories.unshift(createItem(text));
+    saveLocalItems("memories", memories);
+    updateCounts();
+    setResponse("Memoire mobile ajoutee", "Information enregistree dans ce navigateur.", [text]);
+  }
+
+  function clearStore(type, label) {
+    if (bridgeAuthenticated) {
+      setResponse("Action reservee au desktop", `Pour proteger vos donnees, videz ${label.toLowerCase()} depuis JARVIS desktop.`);
+      return;
+    }
+    saveLocalItems(type, []);
+    updateCounts();
+    setResponse(`${label} vide`, `Les donnees ${label.toLowerCase()} mobiles ont ete supprimees.`);
+  }
+
+  function showHelp() {
+    setResponse("Aide mobile", "JARVIS fonctionne seul ou connecte au desktop avec le Bridge V4.2.", [
+      "bridge statut",
+      "ajoute tache finir Jarvis",
+      "termine tache Jarvis",
+      "note idee de contenu",
+      "rappelle-moi verifier le build",
+      "Posez une question naturelle a Ollama une fois le Bridge connecte"
+    ]);
+  }
+
+  function showBridgeStatus() {
+    if (!bridgeAvailable) {
+      setResponse("Bridge hors ligne", "Ouvrez l'adresse donnee par la commande adresse bridge sur JARVIS desktop.");
+      return;
+    }
+    if (!bridgeAuthenticated) {
+      setResponse("Association requise", "Saisissez le code affiche sur le PC pour activer la synchronisation et Ollama.");
+      return;
+    }
+    const counts = bridgeSummary && bridgeSummary.counts ? bridgeSummary.counts : {};
+    setResponse("Bridge connecte", "Le telephone communique avec JARVIS desktop sur le reseau local.", [
+      `${Number(counts.tasks) || 0} tache(s) en cours`,
+      `${Number(counts.reminders) || 0} rappel(s) actif(s)`,
+      bridgeSummary && bridgeSummary.ollama && bridgeSummary.ollama.ok ? "Ollama connecte" : "Ollama indisponible"
+    ]);
+  }
+
+  function showMobileFeatures() {
+    setResponse("Fonctionnalites mobile", "Mode autonome avec stockage navigateur, ou mode Bridge avec donnees desktop et Ollama local.", [
+      "Aucune API externe requise.",
+      "Les commandes Windows restent bloquees a distance.",
+      "L'association expire automatiquement."
+    ]);
+  }
+
+  function showDesktopFeatures() {
+    setResponse("Fonctionnalites desktop", "Electron garde Ollama, les fichiers locaux, les commandes systeme, la memoire fichier et les automatisations avancees.");
   }
 
   function isStandalonePwa() {
@@ -136,216 +560,87 @@
 
   async function promptInstall() {
     if (!deferredInstallPrompt) {
-      setResponse(
-        "Installation mobile",
-        "Si le bouton d'installation n'apparait pas, utilisez le menu du navigateur puis Ajouter a l'ecran d'accueil."
-      );
+      setResponse("Installation mobile", "Utilisez le menu du navigateur puis Ajouter a l'ecran d'accueil si le bouton natif n'apparait pas.");
       return;
     }
-
     deferredInstallPrompt.prompt();
     const choice = await deferredInstallPrompt.userChoice.catch(() => null);
     deferredInstallPrompt = null;
     if (installPanel) installPanel.hidden = true;
-
-    if (choice && choice.outcome === "accepted") {
-      setResponse("Installation lancee", "JARVIS va etre ajoute a votre ecran d'accueil si le navigateur confirme l'installation.");
-    } else {
-      setResponse("Installation annulee", "Vous pourrez relancer l'installation depuis la commande installer jarvis.");
-    }
-  }
-
-  function desktopOnlyResponse() {
-    setResponse("Version desktop requise", "Cette fonctionnalite est disponible uniquement sur la version desktop.");
-  }
-
-  function addTask(text) {
-    if (!text) {
-      setResponse("Tache vide", "Precisez le contenu de la tache, par exemple : ajoute tache tester Jarvis.");
-      return;
-    }
-    const tasks = getItems("tasks");
-    tasks.push(createItem(text, { status: "todo" }));
-    saveItems("tasks", tasks);
-    updateCounts();
-    setResponse("Tache ajoutee", "Tache enregistree dans le stockage mobile.", [text]);
-  }
-
-  function completeTask(query) {
-    const tasks = getItems("tasks");
-    const normalizedQuery = normalize(query);
-    const task = tasks.find((item) => normalize(item.content || item.title).includes(normalizedQuery) && item.status !== "completed");
-    if (!task) {
-      setResponse("Tache introuvable", "Aucune tache mobile ne correspond a votre recherche.");
-      return;
-    }
-    task.status = "completed";
-    task.completedAt = new Date().toISOString();
-    saveItems("tasks", tasks);
-    updateCounts();
-    setResponse("Tache terminee", "J'ai marque cette tache comme terminee.", [task.content || task.title]);
-  }
-
-  function addNote(text) {
-    if (!text) {
-      setResponse("Note vide", "Precisez le contenu de la note, par exemple : note idee de routine mobile.");
-      return;
-    }
-    const notes = getItems("notes");
-    notes.push(createItem(text));
-    saveItems("notes", notes);
-    updateCounts();
-    setResponse("Note enregistree", "Note ajoutee au stockage mobile.", [text]);
-  }
-
-  function addReminder(text) {
-    if (!text) {
-      setResponse("Rappel vide", "Precisez le contenu du rappel, par exemple : rappelle-moi verifier Jarvis.");
-      return;
-    }
-    const reminders = getItems("reminders");
-    reminders.push(createItem(text, { done: false }));
-    saveItems("reminders", reminders);
-    updateCounts();
-    setResponse("Rappel ajoute", "Rappel simple enregistre dans la version mobile.", [text]);
-  }
-
-  function addPlanning(text) {
-    if (!text) {
-      setResponse("Planning vide", "Precisez l'element de planning a enregistrer.");
-      return;
-    }
-    const planning = getItems("planning");
-    planning.push(createItem(text));
-    saveItems("planning", planning);
-    updateCounts();
-    setResponse("Planning mis a jour", "Element ajoute au planning mobile.", [text]);
-  }
-
-  function addMemory(text) {
-    if (!text) {
-      setResponse("Memoire vide", "Precisez l'information a memoriser, par exemple : souviens-toi que je travaille sur Jarvis.");
-      return;
-    }
-    const memories = getItems("memories");
-    memories.push(createItem(text));
-    saveItems("memories", memories);
-    updateCounts();
-    setResponse("Memoire mobile ajoutee", "Information enregistree localement dans ce navigateur.", [text]);
-  }
-
-  function clearStore(type, label) {
-    saveItems(type, []);
-    updateCounts();
-    setResponse(`${label} vide`, `Les donnees ${label.toLowerCase()} mobiles ont ete supprimees.`);
-  }
-
-  function showHelp() {
     setResponse(
-      "Aide mobile",
-      "Cette version est volontairement simple, tactile et independante d'Electron.",
-      [
-        "ajoute tache finir Jarvis",
-        "termine tache Jarvis",
-        "note idee de contenu",
-        "rappelle-moi verifier le build",
-        "ajoute planning test mobile",
-        "souviens-toi que je travaille sur Jarvis"
-      ]
-    );
-  }
-
-  function showMobileFeatures() {
-    setResponse(
-      "Fonctionnalites mobile",
-      "La version mobile gere les commandes texte simples, notes, taches, rappels, planning, memoire navigateur et installation PWA.",
-      ["Tout reste dans localStorage.", "Aucune API externe n'est requise.", "L'interface fonctionne sans window.jarvisAPI."]
-    );
-  }
-
-  function showDesktopFeatures() {
-    setResponse(
-      "Fonctionnalites desktop",
-      "La version desktop Electron garde Ollama, les fichiers locaux, les commandes systeme, la memoire fichier et les automatisations avancees.",
-      ["Ouvrir documents", "Ollama local", "Commandes fenetre Electron", "Stockage JSON local"]
+      choice && choice.outcome === "accepted" ? "Installation lancee" : "Installation annulee",
+      choice && choice.outcome === "accepted" ? "JARVIS va etre ajoute a votre ecran d'accueil." : "Vous pourrez relancer l'installation plus tard."
     );
   }
 
   async function runCommand(rawCommand) {
     const command = String(rawCommand || "").trim();
     const clean = normalize(command);
-
-    if (!clean) {
-      setResponse("Commande vide", "Entrez une commande ou choisissez une carte mobile.");
-      return;
-    }
-
+    if (!clean) return setResponse("Commande vide", "Entrez une commande ou choisissez une carte mobile.");
     setStatus("Analyse");
 
     const desktopOnly = [
-      "ouvrir documents",
-      "ouvre documents",
-      "ouvrir bureau",
-      "ouvre bureau",
-      "ouvre calculatrice",
-      "plein ecran",
-      "minimise",
-      "ferme jarvis",
-      "statut ia",
-      "test ia",
-      "ollama statut"
+      "ouvrir documents", "ouvre documents", "ouvrir bureau", "ouvre bureau", "ouvre calculatrice",
+      "plein ecran", "minimise", "ferme jarvis", "infos systeme"
     ];
 
     if (desktopOnly.some((item) => clean.includes(item))) {
-      desktopOnlyResponse();
+      setResponse("Version desktop requise", "Cette fonctionnalite est disponible uniquement sur la version desktop.");
     } else if (clean === "aide") {
       showHelp();
+    } else if (clean === "bridge statut" || clean === "statut bridge") {
+      showBridgeStatus();
+    } else if (clean === "synchronise" || clean === "synchroniser") {
+      await syncBridgeData(true);
     } else if (clean === "version mobile" || clean === "mode mobile") {
-      setResponse("JARVIS mobile", `Version ${APP_VERSION}. Interface tactile dediee, stable sur navigateur mobile.`);
+      setResponse("JARVIS mobile", `Version ${APP_VERSION}. ${bridgeAuthenticated ? "Bridge desktop connecte." : "Mode autonome actif."}`);
     } else if (clean === "fonctionnalites mobile") {
       showMobileFeatures();
     } else if (clean === "fonctionnalites desktop") {
       showDesktopFeatures();
     } else if (clean === "installer jarvis") {
       await promptInstall();
-    } else if (clean === "ia") {
-      setResponse("IA mobile", "L'IA locale Ollama reste disponible sur la version desktop. Une passerelle mobile pourra etre ajoutee plus tard.");
+    } else if (clean === "ia" || clean === "statut ia" || clean === "ollama statut") {
+      if (bridgeAuthenticated) showBridgeStatus();
+      else setResponse("IA desktop non connectee", "Associez ce telephone au Bridge pour utiliser Ollama local.");
+    } else if (clean === "test ia") {
+      await askBridgeAi("Confirme en une phrase courte que JARVIS mobile communique avec Ollama.");
     } else if (clean === "taches" || clean === "mes taches" || clean === "tache") {
-      setResponse("Taches mobiles", "Voici les taches enregistrees dans ce navigateur.", formatList(getItems("tasks"), "Aucune tache mobile pour le moment."));
+      setResponse("Taches", bridgeAuthenticated ? "Donnees JARVIS desktop." : "Donnees de ce navigateur.", formatList(getItems("tasks"), "Aucune tache pour le moment."));
     } else if (clean.startsWith("ajoute tache ")) {
-      addTask(command.replace(/^ajoute\s+t[aâ]che\s+/i, "").trim());
+      await addTask(command.split(/\s+/).slice(2).join(" "));
     } else if (clean.startsWith("termine tache ")) {
-      completeTask(command.replace(/^termine\s+t[aâ]che\s+/i, "").trim());
+      await completeTask(command.split(/\s+/).slice(2).join(" "));
     } else if (clean === "notes" || clean === "affiche notes") {
-      setResponse("Notes mobiles", "Voici les notes enregistrees dans ce navigateur.", formatList(getItems("notes"), "Aucune note mobile pour le moment."));
+      setResponse("Notes", bridgeAuthenticated ? "Donnees JARVIS desktop." : "Donnees de ce navigateur.", formatList(getItems("notes"), "Aucune note pour le moment."));
     } else if (clean.startsWith("note ")) {
-      addNote(command.slice(5).trim());
+      await addNote(command.split(/\s+/).slice(1).join(" "));
     } else if (clean === "rappels" || clean === "mes rappels") {
-      setResponse("Rappels mobiles", "Voici les rappels simples enregistres.", formatList(getItems("reminders"), "Aucun rappel mobile pour le moment."));
+      setResponse("Rappels", bridgeAuthenticated ? "Donnees JARVIS desktop." : "Donnees de ce navigateur.", formatList(getItems("reminders"), "Aucun rappel pour le moment."));
     } else if (clean.startsWith("rappelle moi ")) {
-      addReminder(command.replace(/^rappelle[- ]moi\s+/i, "").trim());
+      const words = command.replace(/-/g, " ").split(/\s+/);
+      await addReminder(words.slice(2).join(" ").replace(/^de\s+/i, ""));
     } else if (clean === "planning") {
-      setResponse("Planning mobile", "Voici le planning enregistre dans ce navigateur.", formatList(getItems("planning"), "Aucun planning mobile pour le moment."));
+      setResponse("Planning", bridgeAuthenticated ? "Donnees JARVIS desktop." : "Donnees de ce navigateur.", formatList(getItems("planning"), "Aucun planning pour le moment."));
     } else if (clean.startsWith("ajoute planning ")) {
-      addPlanning(command.replace(/^ajoute\s+planning\s+/i, "").trim());
+      await addPlanning(command.split(/\s+/).slice(2).join(" "));
     } else if (clean === "memoire" || clean === "affiche memoire") {
-      setResponse("Memoire mobile", "Voici la memoire locale de ce navigateur.", formatList(getItems("memories"), "Aucune memoire mobile pour le moment."));
+      setResponse("Memoire", bridgeAuthenticated ? "Donnees JARVIS desktop." : "Donnees de ce navigateur.", formatList(getItems("memories"), "Aucune memoire pour le moment."));
     } else if (clean.startsWith("souviens toi que ")) {
-      addMemory(command.replace(/^souviens[- ]toi\s+que\s+/i, "").trim());
+      const words = command.replace(/-/g, " ").split(/\s+/);
+      await addMemory(words.slice(3).join(" "));
     } else if (clean === "parametres") {
-      setResponse("Parametres mobiles", "Les preferences mobiles sont locales au navigateur.", ["Theme sombre cyan", "Stockage local", "Mode tactile"]);
+      setResponse("Parametres mobiles", "Mode sombre cyan, stockage local et association Bridge securisee.");
     } else if (clean === "vide notes") {
       clearStore("notes", "Notes");
     } else if (clean === "vide taches") {
       clearStore("tasks", "Taches");
     } else if (clean === "vide rappels") {
       clearStore("reminders", "Rappels");
+    } else if (bridgeAuthenticated) {
+      await askBridgeAi(command);
     } else {
-      setResponse(
-        "Commande mobile non reconnue",
-        "Cette version mobile gere les commandes simples. Pour les actions avancees, utilisez la version desktop.",
-        ["Tapez aide pour voir les commandes mobiles."]
-      );
+      setResponse("Commande mobile non reconnue", "Connectez le Bridge pour envoyer les questions naturelles a Ollama, ou tapez aide.");
     }
 
     updateCounts();
@@ -360,20 +655,26 @@
         runCommand(command);
       });
     }
-
     document.querySelectorAll("[data-mobile-command]").forEach((button) => {
-      button.addEventListener("click", () => {
-        runCommand(button.dataset.mobileCommand || "");
-      });
+      button.addEventListener("click", () => runCommand(button.dataset.mobileCommand || ""));
     });
-
-    if (installButton) {
-      installButton.addEventListener("click", promptInstall);
+    if (installButton) installButton.addEventListener("click", promptInstall);
+    if (bridgePairButton) bridgePairButton.addEventListener("click", pairBridge);
+    if (bridgeSyncButton) bridgeSyncButton.addEventListener("click", () => syncBridgeData(true));
+    if (bridgeDisconnectButton) bridgeDisconnectButton.addEventListener("click", disconnectBridge);
+    if (bridgeCodeInput) {
+      bridgeCodeInput.addEventListener("input", () => {
+        bridgeCodeInput.value = bridgeCodeInput.value.replace(/\D/g, "").slice(0, 6);
+      });
+      bridgeCodeInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") pairBridge();
+      });
     }
   }
 
   async function registerServiceWorker() {
-    if (!("serviceWorker" in navigator)) return;
+    const isSecureWeb = location.protocol === "https:" || location.hostname === "localhost";
+    if (!isSecureWeb || !("serviceWorker" in navigator)) return;
     try {
       await navigator.serviceWorker.register("service-worker.js");
     } catch (error) {
@@ -388,12 +689,11 @@
       if (installPanel) installPanel.hidden = false;
       updatePwaState();
     });
-
     window.addEventListener("appinstalled", () => {
       deferredInstallPrompt = null;
       if (installPanel) installPanel.hidden = true;
       updatePwaState();
-      setResponse("JARVIS installe", "La version mobile est maintenant disponible depuis votre ecran d'accueil.");
+      setResponse("JARVIS installe", "La version mobile est disponible depuis votre ecran d'accueil.");
     });
   }
 
@@ -406,15 +706,17 @@
     });
   }
 
-  function init() {
+  async function init() {
     document.documentElement.classList.add("jarvis-mobile-ready");
     initPreferences();
     initInstallPrompt();
     bindInteractions();
     updateCounts();
     updatePwaState();
+    updateBridgeUi();
     registerServiceWorker();
     setStatus("Mode mobile");
+    await detectBridge();
   }
 
   document.addEventListener("DOMContentLoaded", init);

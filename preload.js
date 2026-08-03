@@ -109,5 +109,7 @@ contextBridge.exposeInMainWorld("jarvisAPI", {
   resetAutomationSettings: () => ipcRenderer.invoke("automation:resetSettings"),
   getPreferences: () => ipcRenderer.invoke("preferences:get"),
   updatePreference: (key, value) => ipcRenderer.invoke("preferences:update", String(key || ""), value),
-  resetPreferences: () => ipcRenderer.invoke("preferences:reset")
+  resetPreferences: () => ipcRenderer.invoke("preferences:reset"),
+  getBridgeStatus: () => ipcRenderer.invoke("bridge:get-status"),
+  rotateBridgeCode: () => ipcRenderer.invoke("bridge:rotate-code")
 });
