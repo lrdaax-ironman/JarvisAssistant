@@ -1,5 +1,5 @@
-const CACHE_NAME = "jarvis-mobile-v1";
-const NETWORK_FIRST_ASSETS = ["style.css", "script.js", "voice.css", "mobile.css", "mobile.js"];
+const CACHE_NAME = "jarvis-mobile-v2";
+const NETWORK_FIRST_ASSETS = ["index.html", "mobile.html", "style.css", "script.js", "voice.css", "mobile.css", "mobile.js", "manifest.json"];
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -45,8 +45,10 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
   const requestUrl = new URL(event.request.url);
+  if (requestUrl.pathname.startsWith("/bridge/")) return;
+
   const assetName = requestUrl.pathname.split("/").pop();
-  const isNetworkFirstAsset = NETWORK_FIRST_ASSETS.includes(assetName);
+  const isNetworkFirstAsset = event.request.mode === "navigate" || NETWORK_FIRST_ASSETS.includes(assetName);
   const offlineResponse = () => new Response("", { status: 504, statusText: "Offline" });
   const navigationFallback = () => caches.match("./mobile.html")
     .then((fallback) => fallback || caches.match("./index.html"))

@@ -158,7 +158,7 @@ const SETTINGS_STORAGE_KEY = "jarvisAssistant.settings.v2";
 const HISTORY_STORAGE_KEY = "jarvisAssistant.history.v2";
 const HISTORY_LIMIT = 20;
 const LOCAL_AI_MODEL = "llama3.2:3b";
-const APP_VERSION = "V4.1.1";
+const APP_VERSION = "V4.2.0";
 const DEFAULT_SETTINGS = {
   voiceName: "",
   voiceLang: "",
@@ -414,6 +414,11 @@ const availableCommands = [
   "deploiement",
   "debug mobile",
   "rafraichir mobile",
+  "bridge statut",
+  "adresse bridge",
+  "code bridge",
+  "nouveau code bridge",
+  "aide bridge",
   "fonctionnalites mobile",
   "fonctionnalites desktop",
   "reduis animations",
@@ -692,6 +697,64 @@ function getWebStatusMessage() {
     : "Vous utilisez la version web/mobile de JARVIS.";
 }
 
+async function getBridgeStatusMessage(detail = "status") {
+  const api = getBridgeApi();
+  if (!api) return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.2.";
+
+  try {
+    const status = await api.getBridgeStatus();
+    if (!status || !status.running) {
+      const reason = status && status.lastError ? ` ${status.lastError}` : "";
+      return `Bridge JARVIS indisponible.${reason} Relancez l'application et verifiez le pare-feu Windows.`;
+    }
+
+    const address = Array.isArray(status.addresses) && status.addresses.length
+      ? status.addresses[0]
+      : `http://localhost:${status.port || 3210}/mobile.html`;
+    const code = status.pairingCode || "indisponible";
+
+    if (detail === "address") {
+      return `Adresse mobile Bridge : ${address}\nOuvrez-la sur un telephone connecte au meme Wi-Fi.`;
+    }
+    if (detail === "code") {
+      return `Code d'association Bridge : ${code}. Ce code change apres chaque nouvelle association.`;
+    }
+
+    return [
+      "Bridge JARVIS actif.",
+      `Adresse mobile : ${address}`,
+      `Code d'association : ${code}`,
+      `Appareils associes : ${Number(status.connectedDevices) || 0}.`
+    ].join("\n");
+  } catch (error) {
+    return `Impossible de lire le statut du Bridge : ${error.message || "erreur inconnue"}.`;
+  }
+}
+
+async function rotateBridgePairingCode() {
+  const api = getBridgeApi();
+  if (!api || typeof api.rotateBridgeCode !== "function") {
+    return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.2.";
+  }
+
+  try {
+    const status = await api.rotateBridgeCode();
+    return status && status.running
+      ? `Nouveau code d'association Bridge : ${status.pairingCode}.`
+      : "Le Bridge JARVIS est indisponible.";
+  } catch (error) {
+    return `Impossible de renouveler le code Bridge : ${error.message || "erreur inconnue"}.`;
+  }
+}
+
+function getBridgeHelpMessage() {
+  return [
+    "Bridge JARVIS V4.2 : connectez le PC et le telephone au meme Wi-Fi.",
+    "Tapez adresse bridge, ouvrez cette adresse sur le telephone, puis saisissez le code affiche par code bridge.",
+    "Le Bridge donne acces a Ollama et aux donnees d'organisation locales, sans exposer les commandes Windows a distance."
+  ].join("\n");
+}
+
 function getDeploymentMessage() {
   return [
     "Deploiement web : la version web de JARVIS peut etre deployee sur Vercel ou Netlify comme application statique.",
@@ -707,6 +770,10 @@ function getDesktopOnlyMessage() {
 
 function getAiApi() {
   return aiApi && typeof aiApi.askOllama === "function" ? aiApi : null;
+}
+
+function getBridgeApi() {
+  return aiApi && typeof aiApi.getBridgeStatus === "function" ? aiApi : null;
 }
 
 function getMemoryApi() {
@@ -2893,6 +2960,16 @@ async function handleCommand(command) {
     message = getMobileDebugMessage();
   } else if (cleanCommand === "rafraichir mobile") {
     message = refreshMobileInterface();
+  } else if (cleanCommand === "bridge statut") {
+    message = await getBridgeStatusMessage("status");
+  } else if (cleanCommand === "adresse bridge") {
+    message = await getBridgeStatusMessage("address");
+  } else if (cleanCommand === "code bridge") {
+    message = await getBridgeStatusMessage("code");
+  } else if (cleanCommand === "nouveau code bridge") {
+    message = await rotateBridgePairingCode();
+  } else if (cleanCommand === "aide bridge") {
+    message = getBridgeHelpMessage();
   } else if (cleanCommand === "fonctionnalites mobile") {
     message = getMobileFeaturesMessage();
   } else if (cleanCommand === "fonctionnalites desktop") {

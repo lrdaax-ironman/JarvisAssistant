@@ -40,6 +40,24 @@
       <button type="button" id="install-button">Installer</button>
     </section>
 
+    <section class="bridge-panel" id="bridge-panel" aria-labelledby="bridge-title">
+      <div class="bridge-heading">
+        <div>
+          <span class="eyebrow">Connexion locale</span>
+          <h2 id="bridge-title">JARVIS Bridge</h2>
+        </div>
+        <span class="bridge-state" id="bridge-state" data-tone="idle">Detection...</span>
+      </div>
+      <p id="bridge-detail">Recherche de JARVIS desktop sur cette adresse.</p>
+      <div class="bridge-controls" id="bridge-controls">
+        <label for="bridge-code" id="bridge-code-label">Code affiche sur le PC</label>
+        <input id="bridge-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" />
+        <button type="button" id="bridge-pair-button">Associer</button>
+        <button type="button" id="bridge-sync-button" class="secondary-button" hidden>Synchroniser</button>
+        <button type="button" id="bridge-disconnect-button" class="secondary-button" hidden>Deconnecter</button>
+      </div>
+    </section>
+
     <section class="mobile-grid-section" aria-labelledby="modules-title">
       <div class="section-heading">
         <span>Modules</span>
@@ -50,7 +68,7 @@
         <button type="button" class="module-card" data-mobile-command="ia">
           <span>IA</span>
           <strong>IA</strong>
-          <small>Etat et limites mobiles</small>
+          <small id="ai-mobile-state">Etat et limites mobiles</small>
         </button>
         <button type="button" class="module-card" data-mobile-command="taches">
           <span>TA</span>
@@ -103,6 +121,7 @@
         <button type="button" data-mobile-command="fonctionnalites desktop">Fonctions desktop</button>
         <button type="button" data-mobile-command="installer jarvis">Installer JARVIS</button>
         <button type="button" data-mobile-command="mode mobile">Mode mobile</button>
+        <button type="button" data-mobile-command="bridge statut">Statut Bridge</button>
       </div>
     </section>
 
@@ -112,9 +131,10 @@
         <h2 id="summary-title">Donnees mobiles</h2>
       </div>
       <div class="summary-list">
-        <div><span>Stockage</span><strong>localStorage</strong></div>
+        <div><span>Stockage</span><strong id="storage-state">localStorage</strong></div>
         <div><span>Electron</span><strong>Non requis</strong></div>
-        <div><span>Ollama</span><strong>Desktop</strong></div>
+        <div><span>Bridge</span><strong id="bridge-summary-state">Hors ligne</strong></div>
+        <div><span>Ollama</span><strong id="ollama-mobile-state">Desktop</strong></div>
         <div><span>PWA</span><strong id="pwa-state">Detection...</strong></div>
       </div>
     </section>
