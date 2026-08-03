@@ -213,7 +213,7 @@
 
     bridgeState.textContent = "Connecte";
     bridgeState.dataset.tone = "connected";
-    bridgeDetail.textContent = "Connexion locale chiffree par jeton. Les echanges restent sur votre reseau Wi-Fi.";
+    bridgeDetail.textContent = "Connexion locale authentifiee par jeton. Les echanges restent sur votre reseau Wi-Fi.";
     if (bridgeCodeLabel) bridgeCodeLabel.hidden = true;
     if (bridgeCodeInput) bridgeCodeInput.hidden = true;
     if (bridgePairButton) bridgePairButton.hidden = true;
