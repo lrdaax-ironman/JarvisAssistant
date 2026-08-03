@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "4.1 mobile";
+  const APP_VERSION = "4.1.1 mobile";
   const STORAGE_PREFIX = "jarvis-mobile:";
   const STORE = {
     tasks: `${STORAGE_PREFIX}tasks`,
