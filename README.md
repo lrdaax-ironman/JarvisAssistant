@@ -4,7 +4,7 @@ Application desktop Electron locale avec interface JARVIS, Ollama, memoire, orga
 
 ## Version PWA mobile
 
-Depuis la V4.1 corrective, JARVIS dispose d'une vraie version mobile dediee, separee de l'interface desktop Electron.
+Depuis la V4.1.1 corrective, JARVIS dispose d'une vraie version mobile dediee, separee de l'interface desktop Electron.
 
 Fichiers PWA :
 

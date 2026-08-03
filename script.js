@@ -158,7 +158,7 @@ const SETTINGS_STORAGE_KEY = "jarvisAssistant.settings.v2";
 const HISTORY_STORAGE_KEY = "jarvisAssistant.history.v2";
 const HISTORY_LIMIT = 20;
 const LOCAL_AI_MODEL = "llama3.2:3b";
-const APP_VERSION = "V4.1";
+const APP_VERSION = "V4.1.1";
 const DEFAULT_SETTINGS = {
   voiceName: "",
   voiceLang: "",
