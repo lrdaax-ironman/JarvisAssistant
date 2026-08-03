@@ -58,6 +58,11 @@ Notes :
 
 Depuis la V4.1, JARVIS est prepare pour un deploiement statique sur Vercel ou Netlify.
 
+Production Vercel :
+
+- Mobile/PWA : https://jarvis-assistant-puce.vercel.app/mobile.html
+- Interface web complete : https://jarvis-assistant-puce.vercel.app/
+
 Fichiers web attendus a la racine :
 
 - `index.html`
