@@ -2,6 +2,11 @@
   const APP_VERSION = "4.3.0 mobile";
   const STORAGE_PREFIX = "jarvis-mobile:";
   const BRIDGE_TOKEN_KEY = `${STORAGE_PREFIX}bridge-token`;
+  const DESKTOP_ONLY_COMMANDS = new Set([
+    "ouvrir documents", "ouvre documents", "ouvrir bureau", "ouvre bureau",
+    "ouvrir calculatrice", "ouvre calculatrice", "ouvrir navigateur", "ouvre navigateur",
+    "infos systeme", "plein ecran", "fenetre", "minimise", "ferme jarvis"
+  ]);
   const STORE = {
     tasks: `${STORAGE_PREFIX}tasks`,
     notes: `${STORAGE_PREFIX}notes`,
@@ -585,7 +590,7 @@
 
     const desktopOnly = window.JarvisMobileCommands
       ? window.JarvisMobileCommands.isDesktopOnlyMobileCommand(clean)
-      : false;
+      : DESKTOP_ONLY_COMMANDS.has(clean);
 
     if (desktopOnly) {
       setResponse("Version desktop requise", "Cette fonctionnalite est disponible uniquement sur la version desktop.");
