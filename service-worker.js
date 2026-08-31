@@ -1,5 +1,5 @@
-const CACHE_NAME = "jarvis-mobile-v2";
-const NETWORK_FIRST_ASSETS = ["index.html", "mobile.html", "style.css", "script.js", "voice.css", "mobile.css", "mobile.js", "manifest.json"];
+const CACHE_NAME = "jarvis-mobile-v3";
+const NETWORK_FIRST_ASSETS = ["index.html", "mobile.html", "style.css", "script.js", "voice.css", "mobile.css", "mobile.js", "mobile-command-routing.js", "manifest.json"];
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const CORE_ASSETS = [
   "./voice.css",
   "./script.js",
   "./mobile.css",
+  "./mobile-command-routing.js",
   "./mobile.js",
   "./manifest.json",
   "./vercel.json",

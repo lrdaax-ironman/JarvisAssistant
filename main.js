@@ -1,9 +1,9 @@
 const { app, BrowserWindow, ipcMain, shell, session } = require("electron");
 const { spawn } = require("node:child_process");
-const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { createJarvisBridge } = require("./bridge-server");
+const { createMemoryStore } = require("./memory-store");
 
 const APP_TITLE = "JARVIS Assistant";
 const OLLAMA_URL = "http://localhost:11434/api/chat";
@@ -55,6 +55,7 @@ const EMPTY_MEMORY_DATA = {
   preferences: DEFAULT_PREFERENCES
 };
 let jarvisBridge = null;
+let memoryStore = null;
 
 app.commandLine.appendSwitch("enable-features", "MediaStream");
 
@@ -144,6 +145,18 @@ function getMemoryFilePath() {
   return path.join(app.getPath("userData"), MEMORY_FILE_NAME);
 }
 
+function getMemoryStore() {
+  if (!memoryStore) {
+    memoryStore = createMemoryStore({
+      filePath: getMemoryFilePath(),
+      defaults: EMPTY_MEMORY_DATA,
+      normalize: normalizeMemoryData
+    });
+  }
+
+  return memoryStore;
+}
+
 function normalizeMemoryData(data) {
   const memories = Array.isArray(data && data.memories) ? data.memories : [];
   const notes = Array.isArray(data && data.notes) ? data.notes : [];
@@ -226,25 +239,12 @@ function normalizeMemoryData(data) {
   };
 }
 
-async function writeMemoryData(data) {
-  const normalizedData = normalizeMemoryData(data);
-  await fs.mkdir(app.getPath("userData"), { recursive: true });
-  await fs.writeFile(getMemoryFilePath(), JSON.stringify(normalizedData, null, 2), "utf8");
-  return normalizedData;
+async function readMemoryData() {
+  return getMemoryStore().read();
 }
 
-async function readMemoryData() {
-  try {
-    const rawData = await fs.readFile(getMemoryFilePath(), "utf8");
-    return normalizeMemoryData(JSON.parse(rawData));
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      return writeMemoryData(EMPTY_MEMORY_DATA);
-    }
-
-    console.error("Erreur memoire locale:", error);
-    return writeMemoryData(EMPTY_MEMORY_DATA);
-  }
+async function mutateMemoryData(mutator) {
+  return getMemoryStore().mutate(mutator);
 }
 
 function sanitizeLocalText(content, maxLength = 1200) {
@@ -362,19 +362,19 @@ async function addMemory(content, category = "general") {
   const safeContent = sanitizeLocalText(content);
   if (!safeContent) return { ok: false, message: "Memoire vide." };
 
-  const data = await readMemoryData();
-  const now = new Date().toISOString();
-  const memory = {
-    id: createLocalId("memory"),
-    content: safeContent,
-    category: sanitizeLocalText(category, 80) || "general",
-    createdAt: now,
-    updatedAt: now
-  };
+  return mutateMemoryData((data) => {
+    const now = new Date().toISOString();
+    const memory = {
+      id: createLocalId("memory"),
+      content: safeContent,
+      category: sanitizeLocalText(category, 80) || "general",
+      createdAt: now,
+      updatedAt: now
+    };
 
-  data.memories.unshift(memory);
-  await writeMemoryData(data);
-  return { ok: true, memory, memories: data.memories };
+    data.memories.unshift(memory);
+    return { ok: true, memory, memories: data.memories };
+  });
 }
 
 async function listMemories() {
@@ -394,34 +394,34 @@ async function searchMemory(query) {
 
 async function deleteMemory(id) {
   const safeId = sanitizeLocalText(id, 120);
-  const data = await readMemoryData();
-  const beforeCount = data.memories.length;
-  data.memories = data.memories.filter((memory) => memory.id !== safeId);
-  await writeMemoryData(data);
-  return { ok: true, deleted: beforeCount - data.memories.length, memories: data.memories };
+  return mutateMemoryData((data) => {
+    const beforeCount = data.memories.length;
+    data.memories = data.memories.filter((memory) => memory.id !== safeId);
+    return { ok: true, deleted: beforeCount - data.memories.length, memories: data.memories };
+  });
 }
 
 async function clearMemory() {
-  const data = await readMemoryData();
-  data.memories = [];
-  await writeMemoryData(data);
-  return { ok: true, memories: [] };
+  return mutateMemoryData((data) => {
+    data.memories = [];
+    return { ok: true, memories: [] };
+  });
 }
 
 async function addNote(content) {
   const safeContent = sanitizeLocalText(content);
   if (!safeContent) return { ok: false, message: "Note vide." };
 
-  const data = await readMemoryData();
-  const note = {
-    id: createLocalId("note"),
-    content: safeContent,
-    createdAt: new Date().toISOString()
-  };
+  return mutateMemoryData((data) => {
+    const note = {
+      id: createLocalId("note"),
+      content: safeContent,
+      createdAt: new Date().toISOString()
+    };
 
-  data.notes.unshift(note);
-  await writeMemoryData(data);
-  return { ok: true, note, notes: data.notes };
+    data.notes.unshift(note);
+    return { ok: true, note, notes: data.notes };
+  });
 }
 
 async function listNotes() {
@@ -441,38 +441,38 @@ async function searchNotes(query) {
 
 async function deleteNote(id) {
   const safeId = sanitizeLocalText(id, 120);
-  const data = await readMemoryData();
-  const beforeCount = data.notes.length;
-  data.notes = data.notes.filter((note) => note.id !== safeId);
-  await writeMemoryData(data);
-  return { ok: true, deleted: beforeCount - data.notes.length, notes: data.notes };
+  return mutateMemoryData((data) => {
+    const beforeCount = data.notes.length;
+    data.notes = data.notes.filter((note) => note.id !== safeId);
+    return { ok: true, deleted: beforeCount - data.notes.length, notes: data.notes };
+  });
 }
 
 async function clearNotes() {
-  const data = await readMemoryData();
-  data.notes = [];
-  await writeMemoryData(data);
-  return { ok: true, notes: [] };
+  return mutateMemoryData((data) => {
+    data.notes = [];
+    return { ok: true, notes: [] };
+  });
 }
 
 async function addTask(title, options = {}) {
   const safeTitle = sanitizeLocalText(title);
   if (!safeTitle) return { ok: false, message: "Tache vide." };
 
-  const data = await readMemoryData();
-  const task = {
-    id: createLocalId("task"),
-    title: safeTitle,
-    status: "todo",
-    priority: normalizeTaskPriority(options && options.priority),
-    createdAt: new Date().toISOString(),
-    completedAt: null,
-    dueAt: typeof options.dueAt === "string" ? options.dueAt : null
-  };
+  return mutateMemoryData((data) => {
+    const task = {
+      id: createLocalId("task"),
+      title: safeTitle,
+      status: "todo",
+      priority: normalizeTaskPriority(options && options.priority),
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+      dueAt: typeof options.dueAt === "string" ? options.dueAt : null
+    };
 
-  data.tasks.unshift(task);
-  await writeMemoryData(data);
-  return { ok: true, task, tasks: data.tasks };
+    data.tasks.unshift(task);
+    return { ok: true, task, tasks: data.tasks };
+  });
 }
 
 async function listTasks() {
@@ -482,41 +482,41 @@ async function listTasks() {
 
 async function completeTask(id) {
   const safeId = sanitizeLocalText(id, 120);
-  const data = await readMemoryData();
-  const task = data.tasks.find((item) => item.id === safeId);
-  if (!task) return { ok: false, message: "Tache introuvable.", tasks: data.tasks };
+  return mutateMemoryData((data) => {
+    const task = data.tasks.find((item) => item.id === safeId);
+    if (!task) return { ok: false, message: "Tache introuvable.", tasks: data.tasks };
 
-  task.status = "completed";
-  task.completedAt = new Date().toISOString();
-  await writeMemoryData(data);
-  return { ok: true, task, tasks: data.tasks };
+    task.status = "completed";
+    task.completedAt = new Date().toISOString();
+    return { ok: true, task, tasks: data.tasks };
+  });
 }
 
 async function deleteTask(id) {
   const safeId = sanitizeLocalText(id, 120);
-  const data = await readMemoryData();
-  const beforeCount = data.tasks.length;
-  data.tasks = data.tasks.filter((task) => task.id !== safeId);
-  await writeMemoryData(data);
-  return { ok: true, deleted: beforeCount - data.tasks.length, tasks: data.tasks };
+  return mutateMemoryData((data) => {
+    const beforeCount = data.tasks.length;
+    data.tasks = data.tasks.filter((task) => task.id !== safeId);
+    return { ok: true, deleted: beforeCount - data.tasks.length, tasks: data.tasks };
+  });
 }
 
 async function clearTasks() {
-  const data = await readMemoryData();
-  data.tasks = [];
-  await writeMemoryData(data);
-  return { ok: true, tasks: [] };
+  return mutateMemoryData((data) => {
+    data.tasks = [];
+    return { ok: true, tasks: [] };
+  });
 }
 
 async function setTaskPriority(id, priority) {
   const safeId = sanitizeLocalText(id, 120);
-  const data = await readMemoryData();
-  const task = data.tasks.find((item) => item.id === safeId);
-  if (!task) return { ok: false, message: "Tache introuvable.", tasks: data.tasks };
+  return mutateMemoryData((data) => {
+    const task = data.tasks.find((item) => item.id === safeId);
+    if (!task) return { ok: false, message: "Tache introuvable.", tasks: data.tasks };
 
-  task.priority = normalizeTaskPriority(priority);
-  await writeMemoryData(data);
-  return { ok: true, task, tasks: data.tasks };
+    task.priority = normalizeTaskPriority(priority);
+    return { ok: true, task, tasks: data.tasks };
+  });
 }
 
 async function getTodayTasks() {
@@ -529,18 +529,18 @@ async function addReminder(title, remindAt) {
   const safeTitle = sanitizeLocalText(title);
   if (!safeTitle) return { ok: false, message: "Rappel vide." };
 
-  const data = await readMemoryData();
-  const reminder = {
-    id: createLocalId("reminder"),
-    title: safeTitle,
-    createdAt: new Date().toISOString(),
-    remindAt: typeof remindAt === "string" && remindAt ? remindAt : null,
-    done: false
-  };
+  return mutateMemoryData((data) => {
+    const reminder = {
+      id: createLocalId("reminder"),
+      title: safeTitle,
+      createdAt: new Date().toISOString(),
+      remindAt: typeof remindAt === "string" && remindAt ? remindAt : null,
+      done: false
+    };
 
-  data.reminders.unshift(reminder);
-  await writeMemoryData(data);
-  return { ok: true, reminder, reminders: data.reminders };
+    data.reminders.unshift(reminder);
+    return { ok: true, reminder, reminders: data.reminders };
+  });
 }
 
 async function listReminders() {
@@ -550,18 +550,18 @@ async function listReminders() {
 
 async function deleteReminder(id) {
   const safeId = sanitizeLocalText(id, 120);
-  const data = await readMemoryData();
-  const beforeCount = data.reminders.length;
-  data.reminders = data.reminders.filter((reminder) => reminder.id !== safeId);
-  await writeMemoryData(data);
-  return { ok: true, deleted: beforeCount - data.reminders.length, reminders: data.reminders };
+  return mutateMemoryData((data) => {
+    const beforeCount = data.reminders.length;
+    data.reminders = data.reminders.filter((reminder) => reminder.id !== safeId);
+    return { ok: true, deleted: beforeCount - data.reminders.length, reminders: data.reminders };
+  });
 }
 
 async function clearReminders() {
-  const data = await readMemoryData();
-  data.reminders = [];
-  await writeMemoryData(data);
-  return { ok: true, reminders: [] };
+  return mutateMemoryData((data) => {
+    data.reminders = [];
+    return { ok: true, reminders: [] };
+  });
 }
 
 async function getDueReminders() {
@@ -573,31 +573,35 @@ async function getDueReminders() {
     return Number.isFinite(dueAt) && dueAt <= now;
   });
 
-  dueReminders.forEach((reminder) => {
-    reminder.done = true;
-  });
+  if (!dueReminders.length) return { ok: true, reminders: [] };
 
-  if (dueReminders.length) await writeMemoryData(data);
-  return { ok: true, reminders: dueReminders };
+  const dueIds = new Set(dueReminders.map((reminder) => reminder.id));
+  return mutateMemoryData((latestData) => {
+    const latestDueReminders = latestData.reminders.filter((reminder) => dueIds.has(reminder.id) && !reminder.done);
+    latestDueReminders.forEach((reminder) => {
+      reminder.done = true;
+    });
+    return { ok: true, reminders: latestDueReminders };
+  });
 }
 
 async function addPlanningItem(item = {}) {
   const safeTitle = sanitizeLocalText(item.title);
   if (!safeTitle) return { ok: false, message: "Element de planning vide." };
 
-  const data = await readMemoryData();
-  const planningItem = {
-    id: createLocalId("planning"),
-    title: safeTitle,
-    date: normalizeDateKey(item.date),
-    time: typeof item.time === "string" && /^\d{2}:\d{2}$/.test(item.time) ? item.time : null,
-    type: normalizePlanningType(item.type),
-    createdAt: new Date().toISOString()
-  };
+  return mutateMemoryData((data) => {
+    const planningItem = {
+      id: createLocalId("planning"),
+      title: safeTitle,
+      date: normalizeDateKey(item.date),
+      time: typeof item.time === "string" && /^\d{2}:\d{2}$/.test(item.time) ? item.time : null,
+      type: normalizePlanningType(item.type),
+      createdAt: new Date().toISOString()
+    };
 
-  data.planning.unshift(planningItem);
-  await writeMemoryData(data);
-  return { ok: true, item: planningItem, planning: data.planning };
+    data.planning.unshift(planningItem);
+    return { ok: true, item: planningItem, planning: data.planning };
+  });
 }
 
 async function listPlanning() {
@@ -613,18 +617,18 @@ async function getTodayPlanning() {
 
 async function deletePlanningItem(id) {
   const safeId = sanitizeLocalText(id, 120);
-  const data = await readMemoryData();
-  const beforeCount = data.planning.length;
-  data.planning = data.planning.filter((item) => item.id !== safeId);
-  await writeMemoryData(data);
-  return { ok: true, deleted: beforeCount - data.planning.length, planning: data.planning };
+  return mutateMemoryData((data) => {
+    const beforeCount = data.planning.length;
+    data.planning = data.planning.filter((item) => item.id !== safeId);
+    return { ok: true, deleted: beforeCount - data.planning.length, planning: data.planning };
+  });
 }
 
 async function clearPlanning() {
-  const data = await readMemoryData();
-  data.planning = [];
-  await writeMemoryData(data);
-  return { ok: true, planning: [] };
+  return mutateMemoryData((data) => {
+    data.planning = [];
+    return { ok: true, planning: [] };
+  });
 }
 
 function mergeDailyLog(existingLog, incomingLog) {
@@ -639,30 +643,29 @@ function mergeDailyLog(existingLog, incomingLog) {
 }
 
 async function addDailyLog(log = {}) {
-  const data = await readMemoryData();
-  const targetDate = normalizeDateKey(log.date);
-  const existingLog = data.dailyLogs.find((item) => item.date === targetDate);
+  return mutateMemoryData((data) => {
+    const targetDate = normalizeDateKey(log.date);
+    const existingLog = data.dailyLogs.find((item) => item.date === targetDate);
 
-  if (existingLog) {
-    Object.assign(existingLog, mergeDailyLog(existingLog, log));
-    await writeMemoryData(data);
-    return { ok: true, log: existingLog, dailyLogs: data.dailyLogs };
-  }
+    if (existingLog) {
+      Object.assign(existingLog, mergeDailyLog(existingLog, log));
+      return { ok: true, log: existingLog, dailyLogs: data.dailyLogs };
+    }
 
-  const dailyLog = {
-    id: createLocalId("daily"),
-    date: targetDate,
-    summary: sanitizeLocalText(log.summary),
-    mood: sanitizeLocalText(log.mood, 80),
-    energy: sanitizeLocalText(log.energy, 80),
-    wins: normalizeTextArray(log.wins),
-    blockers: normalizeTextArray(log.blockers),
-    createdAt: new Date().toISOString()
-  };
+    const dailyLog = {
+      id: createLocalId("daily"),
+      date: targetDate,
+      summary: sanitizeLocalText(log.summary),
+      mood: sanitizeLocalText(log.mood, 80),
+      energy: sanitizeLocalText(log.energy, 80),
+      wins: normalizeTextArray(log.wins),
+      blockers: normalizeTextArray(log.blockers),
+      createdAt: new Date().toISOString()
+    };
 
-  data.dailyLogs.unshift(dailyLog);
-  await writeMemoryData(data);
-  return { ok: true, log: dailyLog, dailyLogs: data.dailyLogs };
+    data.dailyLogs.unshift(dailyLog);
+    return { ok: true, log: dailyLog, dailyLogs: data.dailyLogs };
+  });
 }
 
 async function listDailyLogs() {
@@ -677,25 +680,25 @@ async function getTodayDailyLog() {
 }
 
 async function clearDailyLogs() {
-  const data = await readMemoryData();
-  data.dailyLogs = [];
-  await writeMemoryData(data);
-  return { ok: true, dailyLogs: [] };
+  return mutateMemoryData((data) => {
+    data.dailyLogs = [];
+    return { ok: true, dailyLogs: [] };
+  });
 }
 
 async function addFocusSession(session = {}) {
-  const data = await readMemoryData();
-  const focusSession = {
-    id: createLocalId("focus"),
-    duration: normalizeDuration(session.duration),
-    startedAt: typeof session.startedAt === "string" ? session.startedAt : new Date().toISOString(),
-    endedAt: null,
-    status: "running"
-  };
+  return mutateMemoryData((data) => {
+    const focusSession = {
+      id: createLocalId("focus"),
+      duration: normalizeDuration(session.duration),
+      startedAt: typeof session.startedAt === "string" ? session.startedAt : new Date().toISOString(),
+      endedAt: null,
+      status: "running"
+    };
 
-  data.focusSessions.unshift(focusSession);
-  await writeMemoryData(data);
-  return { ok: true, session: focusSession, focusSessions: data.focusSessions };
+    data.focusSessions.unshift(focusSession);
+    return { ok: true, session: focusSession, focusSessions: data.focusSessions };
+  });
 }
 
 async function listFocusSessions() {
@@ -705,21 +708,21 @@ async function listFocusSessions() {
 
 async function completeFocusSession(id, status = "completed") {
   const safeId = sanitizeLocalText(id, 120);
-  const data = await readMemoryData();
-  const session = data.focusSessions.find((item) => item.id === safeId);
-  if (!session) return { ok: false, message: "Session focus introuvable.", focusSessions: data.focusSessions };
+  return mutateMemoryData((data) => {
+    const session = data.focusSessions.find((item) => item.id === safeId);
+    if (!session) return { ok: false, message: "Session focus introuvable.", focusSessions: data.focusSessions };
 
-  session.status = status === "cancelled" ? "cancelled" : "completed";
-  session.endedAt = new Date().toISOString();
-  await writeMemoryData(data);
-  return { ok: true, session, focusSessions: data.focusSessions };
+    session.status = status === "cancelled" ? "cancelled" : "completed";
+    session.endedAt = new Date().toISOString();
+    return { ok: true, session, focusSessions: data.focusSessions };
+  });
 }
 
 async function clearFocusSessions() {
-  const data = await readMemoryData();
-  data.focusSessions = [];
-  await writeMemoryData(data);
-  return { ok: true, focusSessions: [] };
+  return mutateMemoryData((data) => {
+    data.focusSessions = [];
+    return { ok: true, focusSessions: [] };
+  });
 }
 
 function collectActivityDates(data) {
@@ -854,22 +857,22 @@ async function updateAutomationSetting(key, value) {
     return { ok: false, message: "Automatisation inconnue." };
   }
 
-  const data = await readMemoryData();
-  if (safeKey.startsWith("last")) {
-    data.automations[safeKey] = typeof value === "string" && value ? value : null;
-  } else {
-    data.automations[safeKey] = Boolean(value);
-  }
+  return mutateMemoryData((data) => {
+    if (safeKey.startsWith("last")) {
+      data.automations[safeKey] = typeof value === "string" && value ? value : null;
+    } else {
+      data.automations[safeKey] = Boolean(value);
+    }
 
-  await writeMemoryData(data);
-  return { ok: true, automations: data.automations };
+    return { ok: true, automations: data.automations };
+  });
 }
 
 async function resetAutomationSettings() {
-  const data = await readMemoryData();
-  data.automations = { ...DEFAULT_AUTOMATION_SETTINGS };
-  await writeMemoryData(data);
-  return { ok: true, automations: data.automations };
+  return mutateMemoryData((data) => {
+    data.automations = { ...DEFAULT_AUTOMATION_SETTINGS };
+    return { ok: true, automations: data.automations };
+  });
 }
 
 async function getPreferences() {
@@ -883,27 +886,27 @@ async function updatePreference(key, value) {
     return { ok: false, message: "Preference inconnue." };
   }
 
-  const data = await readMemoryData();
-  const nextPreferences = { ...data.preferences };
+  return mutateMemoryData((data) => {
+    const nextPreferences = { ...data.preferences };
 
-  if (safeKey === "activeMode") {
-    nextPreferences.activeMode = sanitizeLocalText(value, 30).toLowerCase();
-  } else if (safeKey === "theme") {
-    nextPreferences.theme = sanitizeLocalText(value, 30).toLowerCase();
-  } else {
-    nextPreferences[safeKey] = Boolean(value);
-  }
+    if (safeKey === "activeMode") {
+      nextPreferences.activeMode = sanitizeLocalText(value, 30).toLowerCase();
+    } else if (safeKey === "theme") {
+      nextPreferences.theme = sanitizeLocalText(value, 30).toLowerCase();
+    } else {
+      nextPreferences[safeKey] = Boolean(value);
+    }
 
-  data.preferences = normalizePreferences(nextPreferences);
-  await writeMemoryData(data);
-  return { ok: true, preferences: data.preferences };
+    data.preferences = normalizePreferences(nextPreferences);
+    return { ok: true, preferences: data.preferences };
+  });
 }
 
 async function resetPreferences() {
-  const data = await readMemoryData();
-  data.preferences = { ...DEFAULT_PREFERENCES };
-  await writeMemoryData(data);
-  return { ok: true, preferences: data.preferences };
+  return mutateMemoryData((data) => {
+    data.preferences = { ...DEFAULT_PREFERENCES };
+    return { ok: true, preferences: data.preferences };
+  });
 }
 
 function normalizeOllamaMessage(message) {

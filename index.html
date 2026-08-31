@@ -37,7 +37,7 @@
         Menu
       </button>
 
-      <a class="desktop-mobile-link" href="mobile.html">Version mobile</a>
+      <button class="desktop-mobile-link" type="button" data-open-bridge-onboarding>Version mobile</button>
 
       <div class="header-status app-header-center">
         <span class="mode-badge cockpit-mode">MODE STANDARD</span>
@@ -95,7 +95,7 @@
         <button type="button" data-nav-target="profiles-panel"><span>PR</span>Modes</button>
         <button type="button" data-nav-target="settings-panel"><span>PA</span>Parametres</button>
         <button type="button" data-command="version mobile"><span>PW</span>Version mobile</button>
-        <small>JARVIS v4.2.0</small>
+        <small>JARVIS v4.3.0</small>
       </aside>
 
       <div class="main-content">
@@ -557,6 +557,14 @@
             <small id="pwa-detail">Mode mobile : auto</small>
             <em id="pwa-installable-state">Installation en attente</em>
             <button id="install-pwa-btn" class="mini-action-btn" type="button" hidden>Installer JARVIS</button>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide mobile-bridge-card">
+            <span>Bridge mobile</span>
+            <strong id="bridge-quick-state">Initialisation</strong>
+            <small id="bridge-quick-address">Adresse locale en attente</small>
+            <em id="bridge-quick-devices">Code protege</em>
+            <button class="mini-action-btn" type="button" data-open-bridge-onboarding>Configurer le mobile</button>
           </article>
 
           <article class="dashboard-card dashboard-card-wide">
@@ -1207,6 +1215,53 @@
       <span>UTILISATEUR : ADMIN</span>
     </footer>
   </div>
+
+  <section id="bridge-onboarding" class="bridge-onboarding" role="dialog" aria-modal="true" aria-labelledby="bridge-onboarding-title" hidden>
+    <button class="bridge-onboarding-backdrop" type="button" data-close-bridge-onboarding aria-label="Fermer"></button>
+    <article class="bridge-onboarding-dialog">
+      <header>
+        <div>
+          <span class="bridge-onboarding-kicker">JARVIS V4.3</span>
+          <h2 id="bridge-onboarding-title">Connecter un mobile</h2>
+          <p>Reliez votre telephone a JARVIS desktop sur le meme reseau Wi-Fi.</p>
+        </div>
+        <button class="bridge-onboarding-close" type="button" data-close-bridge-onboarding aria-label="Fermer">X</button>
+      </header>
+
+      <div class="bridge-onboarding-status">
+        <span id="bridge-onboarding-state" data-tone="idle">Verification du Bridge</span>
+        <small id="bridge-onboarding-devices">Aucun appareil associe</small>
+      </div>
+
+      <div class="bridge-onboarding-grid">
+        <section class="bridge-access-card">
+          <span>Adresse a ouvrir sur le telephone</span>
+          <strong id="bridge-onboarding-address">Adresse en attente...</strong>
+          <button id="bridge-copy-address" type="button">Copier l'adresse</button>
+        </section>
+
+        <section class="bridge-access-card bridge-code-card">
+          <span>Code d'association</span>
+          <strong id="bridge-onboarding-code" data-code="">••••••</strong>
+          <button id="bridge-reveal-code" type="button">Afficher le code</button>
+        </section>
+      </div>
+
+      <ol class="bridge-onboarding-steps">
+        <li><strong>1</strong><span>Connectez le PC et le telephone au meme Wi-Fi.</span></li>
+        <li><strong>2</strong><span>Ouvrez l'adresse ci-dessus dans le navigateur du telephone.</span></li>
+        <li><strong>3</strong><span>Saisissez le code protege, puis lancez l'association.</span></li>
+      </ol>
+
+      <p class="bridge-onboarding-security">Connexion locale uniquement. Les commandes Windows et le systeme de fichiers ne sont jamais exposes au mobile.</p>
+
+      <footer>
+        <button id="bridge-refresh-onboarding" type="button">Actualiser</button>
+        <button id="bridge-rotate-onboarding" type="button">Nouveau code</button>
+        <button type="button" data-close-bridge-onboarding>Terminer</button>
+      </footer>
+    </article>
+  </section>
 
   <script src="script.js"></script>
 </body>

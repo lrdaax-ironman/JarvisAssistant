@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "4.2.0 mobile";
+  const APP_VERSION = "4.3.0 mobile";
   const STORAGE_PREFIX = "jarvis-mobile:";
   const BRIDGE_TOKEN_KEY = `${STORAGE_PREFIX}bridge-token`;
   const STORE = {
@@ -39,6 +39,10 @@
   let bridgeToken = "";
 
   function normalize(value) {
+    if (window.JarvisMobileCommands) {
+      return window.JarvisMobileCommands.normalizeMobileCommand(value);
+    }
+
     return String(value || "")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
@@ -511,7 +515,7 @@
   }
 
   function showHelp() {
-    setResponse("Aide mobile", "JARVIS fonctionne seul ou connecte au desktop avec le Bridge V4.2.", [
+    setResponse("Aide mobile", "JARVIS fonctionne seul ou connecte au desktop avec le Bridge V4.3.", [
       "bridge statut",
       "ajoute tache finir Jarvis",
       "termine tache Jarvis",
@@ -579,12 +583,11 @@
     if (!clean) return setResponse("Commande vide", "Entrez une commande ou choisissez une carte mobile.");
     setStatus("Analyse");
 
-    const desktopOnly = [
-      "ouvrir documents", "ouvre documents", "ouvrir bureau", "ouvre bureau", "ouvre calculatrice",
-      "plein ecran", "minimise", "ferme jarvis", "infos systeme"
-    ];
+    const desktopOnly = window.JarvisMobileCommands
+      ? window.JarvisMobileCommands.isDesktopOnlyMobileCommand(clean)
+      : false;
 
-    if (desktopOnly.some((item) => clean.includes(item))) {
+    if (desktopOnly) {
       setResponse("Version desktop requise", "Cette fonctionnalite est disponible uniquement sur la version desktop.");
     } else if (clean === "aide") {
       showHelp();

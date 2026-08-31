@@ -20,6 +20,18 @@ const pwaState = $("pwa-state");
 const pwaDetail = $("pwa-detail");
 const pwaInstallableState = $("pwa-installable-state");
 const installPwaBtn = $("install-pwa-btn");
+const bridgeQuickState = $("bridge-quick-state");
+const bridgeQuickAddress = $("bridge-quick-address");
+const bridgeQuickDevices = $("bridge-quick-devices");
+const bridgeOnboarding = $("bridge-onboarding");
+const bridgeOnboardingState = $("bridge-onboarding-state");
+const bridgeOnboardingDevices = $("bridge-onboarding-devices");
+const bridgeOnboardingAddress = $("bridge-onboarding-address");
+const bridgeOnboardingCode = $("bridge-onboarding-code");
+const bridgeCopyAddressBtn = $("bridge-copy-address");
+const bridgeRevealCodeBtn = $("bridge-reveal-code");
+const bridgeRefreshOnboardingBtn = $("bridge-refresh-onboarding");
+const bridgeRotateOnboardingBtn = $("bridge-rotate-onboarding");
 
 const currentTime = $("current-time");
 const currentDate = $("current-date");
@@ -158,7 +170,7 @@ const SETTINGS_STORAGE_KEY = "jarvisAssistant.settings.v2";
 const HISTORY_STORAGE_KEY = "jarvisAssistant.history.v2";
 const HISTORY_LIMIT = 20;
 const LOCAL_AI_MODEL = "llama3.2:3b";
-const APP_VERSION = "V4.2.0";
+const APP_VERSION = "V4.3.0";
 const DEFAULT_SETTINGS = {
   voiceName: "",
   voiceLang: "",
@@ -699,7 +711,7 @@ function getWebStatusMessage() {
 
 async function getBridgeStatusMessage(detail = "status") {
   const api = getBridgeApi();
-  if (!api) return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.2.";
+  if (!api) return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.3.";
 
   try {
     const status = await api.getBridgeStatus();
@@ -723,7 +735,7 @@ async function getBridgeStatusMessage(detail = "status") {
     return [
       "Bridge JARVIS actif.",
       `Adresse mobile : ${address}`,
-      `Code d'association : ${code}`,
+      "Code d'association protege. Tapez code bridge pour l'afficher.",
       `Appareils associes : ${Number(status.connectedDevices) || 0}.`
     ].join("\n");
   } catch (error) {
@@ -734,7 +746,7 @@ async function getBridgeStatusMessage(detail = "status") {
 async function rotateBridgePairingCode() {
   const api = getBridgeApi();
   if (!api || typeof api.rotateBridgeCode !== "function") {
-    return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.2.";
+    return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.3.";
   }
 
   try {
@@ -749,8 +761,8 @@ async function rotateBridgePairingCode() {
 
 function getBridgeHelpMessage() {
   return [
-    "Bridge JARVIS V4.2 : connectez le PC et le telephone au meme Wi-Fi.",
-    "Tapez adresse bridge, ouvrez cette adresse sur le telephone, puis saisissez le code affiche par code bridge.",
+    "Bridge JARVIS V4.3 : ouvrez Version mobile dans le header pour lancer le guide de connexion.",
+    "Connectez le PC et le telephone au meme Wi-Fi, ouvrez l'adresse affichee, puis revelez le code d'association.",
     "Le Bridge donne acces a Ollama et aux donnees d'organisation locales, sans exposer les commandes Windows a distance."
   ].join("\n");
 }
@@ -774,6 +786,100 @@ function getAiApi() {
 
 function getBridgeApi() {
   return aiApi && typeof aiApi.getBridgeStatus === "function" ? aiApi : null;
+}
+
+let bridgeCodeVisible = false;
+let currentBridgeAddress = "";
+
+function renderProtectedBridgeCode(code) {
+  if (!bridgeOnboardingCode) return;
+  const safeCode = String(code || "");
+  bridgeOnboardingCode.dataset.code = safeCode;
+  bridgeOnboardingCode.textContent = bridgeCodeVisible && safeCode ? safeCode : "••••••";
+  if (bridgeRevealCodeBtn) bridgeRevealCodeBtn.textContent = bridgeCodeVisible ? "Masquer le code" : "Afficher le code";
+}
+
+function renderBridgeOnboardingStatus(status) {
+  const running = Boolean(status && status.running);
+  const addresses = running && Array.isArray(status.addresses) ? status.addresses : [];
+  const address = addresses[0] || (running ? `http://localhost:${status.port || 3210}/mobile.html` : "");
+  const devices = running ? Number(status.connectedDevices) || 0 : 0;
+  currentBridgeAddress = address;
+
+  if (bridgeQuickState) bridgeQuickState.textContent = running ? "Bridge actif" : "Bridge indisponible";
+  if (bridgeQuickAddress) bridgeQuickAddress.textContent = address || "Relancez JARVIS desktop";
+  if (bridgeQuickDevices) bridgeQuickDevices.textContent = running
+    ? `${devices} appareil${devices > 1 ? "s" : ""} associe${devices > 1 ? "s" : ""} · Code protege`
+    : "Connexion locale inactive";
+
+  if (bridgeOnboardingState) {
+    bridgeOnboardingState.textContent = running ? "Bridge pret" : "Bridge indisponible";
+    bridgeOnboardingState.dataset.tone = running ? "ready" : "error";
+  }
+  if (bridgeOnboardingDevices) {
+    bridgeOnboardingDevices.textContent = `${devices} appareil${devices > 1 ? "s" : ""} associe${devices > 1 ? "s" : ""}`;
+  }
+  if (bridgeOnboardingAddress) {
+    bridgeOnboardingAddress.textContent = address || (status && status.lastError) || "Adresse locale indisponible";
+  }
+  renderProtectedBridgeCode(running ? status.pairingCode : "");
+}
+
+async function refreshBridgeOnboarding() {
+  const api = getBridgeApi();
+  if (!api) {
+    renderBridgeOnboardingStatus({ running: false, lastError: "Version desktop requise" });
+    return null;
+  }
+
+  try {
+    const status = await api.getBridgeStatus();
+    renderBridgeOnboardingStatus(status || { running: false });
+    return status;
+  } catch (error) {
+    renderBridgeOnboardingStatus({ running: false, lastError: error.message || "Erreur Bridge" });
+    return null;
+  }
+}
+
+async function openBridgeOnboarding() {
+  if (!bridgeOnboarding) return;
+  bridgeCodeVisible = false;
+  bridgeOnboarding.hidden = false;
+  document.body.classList.add("bridge-dialog-open");
+  await refreshBridgeOnboarding();
+  const closeButton = bridgeOnboarding.querySelector("[data-close-bridge-onboarding]");
+  if (closeButton) closeButton.focus();
+}
+
+function closeBridgeOnboarding() {
+  if (!bridgeOnboarding) return;
+  bridgeCodeVisible = false;
+  renderProtectedBridgeCode(bridgeOnboardingCode ? bridgeOnboardingCode.dataset.code : "");
+  bridgeOnboarding.hidden = true;
+  document.body.classList.remove("bridge-dialog-open");
+}
+
+async function copyBridgeAddress() {
+  if (!currentBridgeAddress) {
+    respond("Adresse Bridge indisponible. Relancez JARVIS puis actualisez.", false);
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(currentBridgeAddress);
+    respond("Adresse Bridge copiee. Ouvrez-la sur le telephone connecte au meme Wi-Fi.", false);
+  } catch (_error) {
+    const temporaryInput = document.createElement("textarea");
+    temporaryInput.value = currentBridgeAddress;
+    temporaryInput.style.position = "fixed";
+    temporaryInput.style.opacity = "0";
+    document.body.appendChild(temporaryInput);
+    temporaryInput.select();
+    document.execCommand("copy");
+    temporaryInput.remove();
+    respond("Adresse Bridge copiee.", false);
+  }
 }
 
 function getMemoryApi() {
@@ -2944,7 +3050,12 @@ async function handleCommand(command) {
   } else if (cleanCommand === "redemarre ecoute" || cleanCommand === "redemarre l'ecoute") {
     message = await restartVoiceRecognition();
   } else if (cleanCommand === "version mobile") {
-    message = getMobileVersionMessage();
+    if (isDesktopElectron()) {
+      await openBridgeOnboarding();
+      message = await getBridgeStatusMessage("status");
+    } else {
+      message = getMobileVersionMessage();
+    }
   } else if (cleanCommand === "mode mobile") {
     updateMobileMode();
     message = isMobileModeActive
@@ -4040,6 +4151,29 @@ document.querySelectorAll("[data-command]").forEach((button) => {
     closeMobileMenu();
   });
 });
+document.querySelectorAll("[data-open-bridge-onboarding]").forEach((button) => {
+  button.addEventListener("click", openBridgeOnboarding);
+});
+document.querySelectorAll("[data-close-bridge-onboarding]").forEach((button) => {
+  button.addEventListener("click", closeBridgeOnboarding);
+});
+safeBindElement(bridgeCopyAddressBtn, "click", copyBridgeAddress);
+safeBindElement(bridgeRevealCodeBtn, "click", () => {
+  bridgeCodeVisible = !bridgeCodeVisible;
+  renderProtectedBridgeCode(bridgeOnboardingCode ? bridgeOnboardingCode.dataset.code : "");
+});
+safeBindElement(bridgeRefreshOnboardingBtn, "click", refreshBridgeOnboarding);
+safeBindElement(bridgeRotateOnboardingBtn, "click", async () => {
+  const message = await rotateBridgePairingCode();
+  bridgeCodeVisible = false;
+  await refreshBridgeOnboarding();
+  respond(message, false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && bridgeOnboarding && !bridgeOnboarding.hidden) {
+    closeBridgeOnboarding();
+  }
+});
 if (installPwaBtn) {
   installPwaBtn.addEventListener("click", async () => {
     const message = await requestPwaInstall();
@@ -4121,6 +4255,7 @@ refreshOrganization();
 refreshPlanningData();
 refreshAnalytics();
 refreshAutomationSettings();
+refreshBridgeOnboarding();
 updateClock();
 updateMetrics();
 updateMobileMode();
@@ -4141,4 +4276,5 @@ window.setInterval(updateClock, 1000);
 window.setInterval(updateMetrics, 3000);
 window.setInterval(checkDueReminders, 60000);
 window.setInterval(runEveningAutomationIfNeeded, 60000);
+window.setInterval(refreshBridgeOnboarding, 30000);
 if ("speechSynthesis" in window) window.speechSynthesis.onvoiceschanged = loadBrowserVoices;

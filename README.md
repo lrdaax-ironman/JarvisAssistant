@@ -4,13 +4,14 @@ Application desktop Electron locale avec interface JARVIS, Ollama, memoire, orga
 
 ## Version PWA mobile
 
-Depuis la V4.2, JARVIS dispose d'une version mobile dediee avec deux fonctionnements : autonome sur le web, ou reliee au desktop par le Bridge local.
+JARVIS dispose d'une version mobile dediee avec deux fonctionnements : autonome sur le web, ou reliee au desktop par le Bridge local.
 
 Fichiers PWA :
 
 - `mobile.html`
 - `mobile.css`
 - `mobile.js`
+- `mobile-command-routing.js`
 - `manifest.json`
 - `service-worker.js`
 - `assets/icons/icon-192.png`
@@ -56,18 +57,37 @@ Notes :
 - La version mobile utilise `localStorage` pour les notes, taches, rappels, planning, memoire et preferences simples.
 - `mobile.js` ne depend pas de `window.jarvisAPI` et reste stable dans un navigateur mobile.
 - Le service worker est enregistre uniquement en contexte web `http` ou `https`, pas en `file://` Electron.
-- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v2` utilise une strategie network-first pour les fichiers d'interface.
+- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v3` utilise une strategie network-first pour les fichiers d'interface.
 
-## Bridge local V4.2
+## Consolidation V4.3
+
+La V4.3 integre les correctifs valides pendant le benchmark xAI :
+
+- stockage local transactionnel avec ecritures atomiques ;
+- sauvegarde automatique `jarvis-memory.json.bak` ;
+- conservation d'un fichier corrompu dans `jarvis-memory.json.corrupt` ;
+- restauration depuis la sauvegarde sans remise a zero silencieuse ;
+- serialisation des mutations concurrentes ;
+- detection exacte des commandes desktop sur mobile ;
+- onboarding Bridge accessible depuis le bouton `Version mobile` ;
+- code d'association masque par defaut pour les partages d'ecran.
+
+Les tests locaux peuvent etre lances avec :
+
+```powershell
+npm.cmd test
+```
+
+## Bridge local V4.3
 
 Le Bridge relie un telephone a JARVIS desktop sans API externe. Il est lance automatiquement avec Electron et reste limite au reseau local.
 
 Utilisation :
 
 1. Connecter le PC et le telephone au meme Wi-Fi.
-2. Dans JARVIS desktop, taper `adresse bridge`.
+2. Dans JARVIS desktop, cliquer sur `Version mobile`.
 3. Ouvrir l'adresse affichee sur le telephone.
-4. Taper `code bridge` sur le PC, puis saisir les six chiffres sur le telephone.
+4. Reveler le code protege, puis saisir les six chiffres sur le telephone.
 
 Une fois associe, le telephone peut :
 
