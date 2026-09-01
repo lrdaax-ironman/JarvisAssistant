@@ -95,7 +95,7 @@
         <button type="button" data-nav-target="profiles-panel"><span>PR</span>Modes</button>
         <button type="button" data-nav-target="settings-panel"><span>PA</span>Parametres</button>
         <button type="button" data-command="version mobile"><span>PW</span>Version mobile</button>
-        <small>JARVIS v4.3.0</small>
+        <small>JARVIS v4.4.0</small>
       </aside>
 
       <div class="main-content">
@@ -149,6 +149,9 @@
           <li><button type="button" data-command="mode travail">mode travail</button></li>
           <li><button type="button" data-command="parametres">parametres</button></li>
           <li><button type="button" data-command="sauvegarde">sauvegarde</button></li>
+          <li><button type="button" data-command="sauvegarde jarvis">sauvegarde jarvis</button></li>
+          <li><button type="button" data-command="exporte sauvegarde">exporte sauvegarde</button></li>
+          <li><button type="button" data-command="diagnostic stockage">diagnostic stockage</button></li>
           <li><button type="button" data-command="reset parametres">reset parametres</button></li>
           <li><button type="button" data-command="modules">modules</button></li>
           <li><button type="button" data-command="accueil">accueil</button></li>
@@ -1183,6 +1186,7 @@
       </div>
 
       <div class="advanced-actions">
+        <button type="button" data-command="centre sauvegarde">Centre sauvegarde</button>
         <button type="button" data-command="reset jarvis">Reset interface</button>
         <button type="button" data-command="reset voix">Reset voix</button>
         <button type="button" data-command="reset automatisations">Reset automatisations</button>
@@ -1196,6 +1200,48 @@
       </div>
 
       <p class="advanced-warning">Les suppressions locales sont irreversibles. Pour un reset total, JARVIS demande une confirmation explicite.</p>
+    </section>
+
+    <section id="backup-panel" class="panel backup-center-panel" aria-labelledby="backup-title">
+      <div class="backup-center-header">
+        <div class="panel-heading">
+          <span>16</span>
+          <h2 id="backup-title">Sauvegarde et diagnostic</h2>
+        </div>
+        <small id="backup-health-badge" data-tone="idle">Verification locale</small>
+      </div>
+
+      <div class="backup-status-grid">
+        <article>
+          <span>Stockage</span>
+          <strong id="backup-storage-health">Analyse en cours</strong>
+          <small>Memoire transactionnelle</small>
+        </article>
+        <article>
+          <span>Derniere sauvegarde</span>
+          <strong id="backup-latest-date">Aucune</strong>
+          <small id="backup-latest-file">Creation quotidienne active</small>
+        </article>
+        <article>
+          <span>Archives locales</span>
+          <strong id="backup-count">0</strong>
+          <small>10 sauvegardes maximum</small>
+        </article>
+        <article>
+          <span>Donnees suivies</span>
+          <strong id="backup-data-count">0</strong>
+          <small>Elements locaux</small>
+        </article>
+      </div>
+
+      <div class="backup-center-actions">
+        <button id="create-backup-btn" type="button">Creer une sauvegarde</button>
+        <button id="export-backup-btn" type="button">Exporter</button>
+        <button id="import-backup-btn" type="button">Restaurer</button>
+        <button id="diagnose-storage-btn" type="button">Diagnostiquer</button>
+      </div>
+
+      <p id="backup-center-message" class="backup-center-message">Les sauvegardes restent sur ce PC. Une copie de securite est creee avant chaque restauration.</p>
     </section>
 
     <section id="history-panel" class="history" aria-labelledby="history-title">
@@ -1221,7 +1267,7 @@
     <article class="bridge-onboarding-dialog">
       <header>
         <div>
-          <span class="bridge-onboarding-kicker">JARVIS V4.3</span>
+          <span class="bridge-onboarding-kicker">JARVIS V4.4</span>
           <h2 id="bridge-onboarding-title">Connecter un mobile</h2>
           <p>Reliez votre telephone a JARVIS desktop sur le meme reseau Wi-Fi.</p>
         </div>
@@ -1244,6 +1290,28 @@
           <span>Code d'association</span>
           <strong id="bridge-onboarding-code" data-code="">••••••</strong>
           <button id="bridge-reveal-code" type="button">Afficher le code</button>
+        </section>
+      </div>
+
+      <div class="bridge-management-grid">
+        <section class="bridge-qr-card">
+          <div>
+            <span>Connexion rapide</span>
+            <strong>Scanner depuis le telephone</strong>
+            <small>Le QR code contient uniquement l'adresse locale du Bridge.</small>
+          </div>
+          <img id="bridge-onboarding-qr" alt="QR code de connexion au Bridge JARVIS" hidden />
+          <div id="bridge-qr-placeholder" class="bridge-qr-placeholder">QR</div>
+        </section>
+
+        <section class="bridge-device-card">
+          <div>
+            <span>Appareils associes</span>
+            <strong>Sessions mobiles actives</strong>
+          </div>
+          <div id="bridge-device-list" class="bridge-device-list">
+            <p>Aucun appareil associe.</p>
+          </div>
         </section>
       </div>
 

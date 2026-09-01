@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "4.3.0 mobile";
+  const APP_VERSION = "4.4.0 mobile";
   const STORAGE_PREFIX = "jarvis-mobile:";
   const BRIDGE_TOKEN_KEY = `${STORAGE_PREFIX}bridge-token`;
   const DESKTOP_ONLY_COMMANDS = new Set([
@@ -105,6 +105,18 @@
     } catch (_error) {
       bridgeToken = "";
     }
+  }
+
+  function getMobileDeviceInfo() {
+    const platform = String(
+      (navigator.userAgentData && navigator.userAgentData.platform)
+      || navigator.platform
+      || "Navigateur mobile"
+    ).slice(0, 80);
+    return {
+      name: `JARVIS mobile - ${platform}`,
+      platform
+    };
   }
 
   function getLocalItems(type) {
@@ -312,7 +324,7 @@
     try {
       const result = await bridgeRequest("/bridge/pair", {
         method: "POST",
-        body: { code },
+        body: { code, device: getMobileDeviceInfo() },
         authenticate: false
       });
       saveBridgeToken(result.token);
@@ -520,7 +532,7 @@
   }
 
   function showHelp() {
-    setResponse("Aide mobile", "JARVIS fonctionne seul ou connecte au desktop avec le Bridge V4.3.", [
+    setResponse("Aide mobile", "JARVIS fonctionne seul ou connecte au desktop avec le Bridge V4.4.", [
       "bridge statut",
       "ajoute tache finir Jarvis",
       "termine tache Jarvis",

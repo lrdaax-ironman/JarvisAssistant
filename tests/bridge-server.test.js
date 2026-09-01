@@ -10,6 +10,7 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
   const previousCode = process.env.JARVIS_BRIDGE_PAIR_CODE;
   process.env.JARVIS_BRIDGE_PAIR_CODE = "123456";
   await fs.writeFile(path.join(rootDir, "mobile.html"), "<h1>JARVIS Mobile</h1>", "utf8");
+  await fs.writeFile(path.join(rootDir, "mobile-command-routing.js"), "window.routingLoaded = true;", "utf8");
 
   const data = {
     tasks: [],
@@ -23,7 +24,7 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     rootDir,
     host: "127.0.0.1",
     port: 0,
-    version: "4.2.0-test",
+    version: "4.4.0-test",
     model: "test-model",
     readData: async () => data,
     getOllamaStatus: async () => ({ ok: true, model: "test-model" }),
@@ -52,6 +53,7 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     assert.equal(mobileResponse.status, 200);
     assert.match(await mobileResponse.text(), /JARVIS Mobile/);
     assert.match(mobileResponse.headers.get("content-security-policy"), /connect-src 'self'/);
+    assert.equal((await fetch(`${baseUrl}/mobile-command-routing.js`)).status, 200);
 
     const blockedData = await fetch(`${baseUrl}/bridge/data`);
     assert.equal(blockedData.status, 401);
@@ -66,7 +68,10 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     const pairResponse = await fetch(`${baseUrl}/bridge/pair`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: "123456" })
+      body: JSON.stringify({
+        code: "123456",
+        device: { name: "Telephone test", platform: "Test OS" }
+      })
     });
     assert.equal(pairResponse.status, 200);
     const pair = await pairResponse.json();
@@ -95,6 +100,16 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     });
     const aiPayload = await aiResponse.json();
     assert.equal(aiPayload.response, "Reponse: Bonjour");
+
+    const status = bridge.getStatus();
+    assert.equal(status.connectedDevices, 1);
+    assert.equal(status.devices[0].name, "Telephone test");
+    assert.equal(status.devices[0].platform, "Test OS");
+
+    const revoked = bridge.revokeDevice(status.devices[0].id);
+    assert.equal(revoked.revoked, true);
+    assert.equal(bridge.getStatus().connectedDevices, 0);
+    assert.equal((await fetch(`${baseUrl}/bridge/data`, { headers: authHeaders })).status, 401);
 
     const crossOriginResponse = await fetch(`${baseUrl}/bridge/status`, {
       headers: { Origin: "https://example.com" }

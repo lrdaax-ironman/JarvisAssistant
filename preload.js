@@ -110,6 +110,14 @@ contextBridge.exposeInMainWorld("jarvisAPI", {
   getPreferences: () => ipcRenderer.invoke("preferences:get"),
   updatePreference: (key, value) => ipcRenderer.invoke("preferences:update", String(key || ""), value),
   resetPreferences: () => ipcRenderer.invoke("preferences:reset"),
+  getBackupStatus: () => ipcRenderer.invoke("backup:get-status"),
+  createBackup: (label = "manual") => ipcRenderer.invoke("backup:create", String(label || "manual")),
+  exportBackup: () => ipcRenderer.invoke("backup:export"),
+  importBackup: () => ipcRenderer.invoke("backup:import"),
+  diagnoseStorage: () => ipcRenderer.invoke("storage:diagnose"),
   getBridgeStatus: () => ipcRenderer.invoke("bridge:get-status"),
-  rotateBridgeCode: () => ipcRenderer.invoke("bridge:rotate-code")
+  rotateBridgeCode: () => ipcRenderer.invoke("bridge:rotate-code"),
+  getBridgeQrCode: () => ipcRenderer.invoke("bridge:get-qr"),
+  revokeBridgeDevice: (deviceId) => ipcRenderer.invoke("bridge:revoke-device", String(deviceId || "")),
+  getAppInfo: () => ipcRenderer.invoke("jarvis:get-app-info")
 });

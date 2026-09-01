@@ -138,6 +138,40 @@ function createMemoryStore({ filePath, defaults, normalize = (value) => value, f
     }
   }
 
+  async function inspectFile(targetPath, parseJson = true) {
+    try {
+      const [contents, stats] = await Promise.all([
+        fsApi.readFile(targetPath, "utf8"),
+        fsApi.stat(targetPath)
+      ]);
+      let valid = true;
+      if (parseJson) {
+        try {
+          normalize(JSON.parse(contents));
+        } catch (_error) {
+          valid = false;
+        }
+      }
+      return {
+        exists: true,
+        valid,
+        size: stats.size,
+        modifiedAt: stats.mtime.toISOString()
+      };
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        return { exists: false, valid: false, size: 0, modifiedAt: null };
+      }
+      return {
+        exists: true,
+        valid: false,
+        size: 0,
+        modifiedAt: null,
+        error: error.code || error.message
+      };
+    }
+  }
+
   return {
     paths: { primary: filePath, backup: backupPath, corrupt: corruptPath },
     read() {
@@ -156,6 +190,23 @@ function createMemoryStore({ filePath, defaults, normalize = (value) => value, f
         const result = await mutator(data);
         await writeAtomic(data);
         return result;
+      });
+    },
+    diagnose() {
+      return runExclusive(async () => {
+        const [primary, backup, corrupt] = await Promise.all([
+          inspectFile(filePath),
+          inspectFile(backupPath),
+          inspectFile(corruptPath, false)
+        ]);
+        const health = primary.valid
+          ? "healthy"
+          : backup.valid
+            ? "recoverable"
+            : primary.exists || backup.exists
+              ? "error"
+              : "empty";
+        return { health, primary, backup, corrupt };
       });
     }
   };

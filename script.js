@@ -32,6 +32,20 @@ const bridgeCopyAddressBtn = $("bridge-copy-address");
 const bridgeRevealCodeBtn = $("bridge-reveal-code");
 const bridgeRefreshOnboardingBtn = $("bridge-refresh-onboarding");
 const bridgeRotateOnboardingBtn = $("bridge-rotate-onboarding");
+const bridgeOnboardingQr = $("bridge-onboarding-qr");
+const bridgeQrPlaceholder = $("bridge-qr-placeholder");
+const bridgeDeviceList = $("bridge-device-list");
+const backupHealthBadge = $("backup-health-badge");
+const backupStorageHealth = $("backup-storage-health");
+const backupLatestDate = $("backup-latest-date");
+const backupLatestFile = $("backup-latest-file");
+const backupCount = $("backup-count");
+const backupDataCount = $("backup-data-count");
+const backupCenterMessage = $("backup-center-message");
+const createBackupBtn = $("create-backup-btn");
+const exportBackupBtn = $("export-backup-btn");
+const importBackupBtn = $("import-backup-btn");
+const diagnoseStorageBtn = $("diagnose-storage-btn");
 
 const currentTime = $("current-time");
 const currentDate = $("current-date");
@@ -170,7 +184,7 @@ const SETTINGS_STORAGE_KEY = "jarvisAssistant.settings.v2";
 const HISTORY_STORAGE_KEY = "jarvisAssistant.history.v2";
 const HISTORY_LIMIT = 20;
 const LOCAL_AI_MODEL = "llama3.2:3b";
-const APP_VERSION = "V4.3.0";
+const APP_VERSION = "V4.4.0";
 const DEFAULT_SETTINGS = {
   voiceName: "",
   voiceLang: "",
@@ -431,6 +445,12 @@ const availableCommands = [
   "code bridge",
   "nouveau code bridge",
   "aide bridge",
+  "sauvegarde jarvis",
+  "centre sauvegarde",
+  "exporte sauvegarde",
+  "importe sauvegarde",
+  "diagnostic stockage",
+  "a propos jarvis",
   "fonctionnalites mobile",
   "fonctionnalites desktop",
   "reduis animations",
@@ -711,7 +731,7 @@ function getWebStatusMessage() {
 
 async function getBridgeStatusMessage(detail = "status") {
   const api = getBridgeApi();
-  if (!api) return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.3.";
+  if (!api) return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.4.";
 
   try {
     const status = await api.getBridgeStatus();
@@ -746,7 +766,7 @@ async function getBridgeStatusMessage(detail = "status") {
 async function rotateBridgePairingCode() {
   const api = getBridgeApi();
   if (!api || typeof api.rotateBridgeCode !== "function") {
-    return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.3.";
+    return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.4.";
   }
 
   try {
@@ -761,7 +781,7 @@ async function rotateBridgePairingCode() {
 
 function getBridgeHelpMessage() {
   return [
-    "Bridge JARVIS V4.3 : ouvrez Version mobile dans le header pour lancer le guide de connexion.",
+    "Bridge JARVIS V4.4 : ouvrez Version mobile dans le header pour lancer le guide de connexion.",
     "Connectez le PC et le telephone au meme Wi-Fi, ouvrez l'adresse affichee, puis revelez le code d'association.",
     "Le Bridge donne acces a Ollama et aux donnees d'organisation locales, sans exposer les commandes Windows a distance."
   ].join("\n");
@@ -786,6 +806,10 @@ function getAiApi() {
 
 function getBridgeApi() {
   return aiApi && typeof aiApi.getBridgeStatus === "function" ? aiApi : null;
+}
+
+function getBackupApi() {
+  return aiApi && typeof aiApi.getBackupStatus === "function" ? aiApi : null;
 }
 
 let bridgeCodeVisible = false;
@@ -822,7 +846,45 @@ function renderBridgeOnboardingStatus(status) {
   if (bridgeOnboardingAddress) {
     bridgeOnboardingAddress.textContent = address || (status && status.lastError) || "Adresse locale indisponible";
   }
+  renderBridgeDevices(running && Array.isArray(status.devices) ? status.devices : []);
   renderProtectedBridgeCode(running ? status.pairingCode : "");
+}
+
+function renderBridgeDevices(devices) {
+  if (!bridgeDeviceList) return;
+  bridgeDeviceList.textContent = "";
+  if (!devices.length) {
+    const emptyState = document.createElement("p");
+    emptyState.textContent = "Aucun appareil associe.";
+    bridgeDeviceList.appendChild(emptyState);
+    return;
+  }
+
+  devices.forEach((device) => {
+    const row = document.createElement("div");
+    row.className = "bridge-device-row";
+    const details = document.createElement("div");
+    const name = document.createElement("strong");
+    const meta = document.createElement("small");
+    const revokeButton = document.createElement("button");
+    name.textContent = device.name || "Appareil mobile";
+    meta.textContent = `${device.platform || "Navigateur"} · Vu ${formatDateTime(device.lastSeenAt)}`;
+    revokeButton.type = "button";
+    revokeButton.textContent = "Revoquer";
+    revokeButton.dataset.bridgeDeviceId = device.id || "";
+    details.append(name, meta);
+    row.append(details, revokeButton);
+    bridgeDeviceList.appendChild(row);
+  });
+}
+
+function renderBridgeQrCode(result) {
+  const available = Boolean(result && result.ok && result.dataUrl);
+  if (bridgeOnboardingQr) {
+    bridgeOnboardingQr.hidden = !available;
+    bridgeOnboardingQr.src = available ? result.dataUrl : "";
+  }
+  if (bridgeQrPlaceholder) bridgeQrPlaceholder.hidden = available;
 }
 
 async function refreshBridgeOnboarding() {
@@ -835,9 +897,15 @@ async function refreshBridgeOnboarding() {
   try {
     const status = await api.getBridgeStatus();
     renderBridgeOnboardingStatus(status || { running: false });
+    if (status && status.running && typeof api.getBridgeQrCode === "function") {
+      renderBridgeQrCode(await api.getBridgeQrCode());
+    } else {
+      renderBridgeQrCode(null);
+    }
     return status;
   } catch (error) {
     renderBridgeOnboardingStatus({ running: false, lastError: error.message || "Erreur Bridge" });
+    renderBridgeQrCode(null);
     return null;
   }
 }
@@ -880,6 +948,145 @@ async function copyBridgeAddress() {
     temporaryInput.remove();
     respond("Adresse Bridge copiee.", false);
   }
+}
+
+async function revokeBridgeDevice(deviceId) {
+  const api = getBridgeApi();
+  if (!api || typeof api.revokeBridgeDevice !== "function" || !deviceId) return;
+  const result = await api.revokeBridgeDevice(deviceId);
+  await refreshBridgeOnboarding();
+  respond(result && result.revoked ? "Appareil mobile revoque." : "Appareil mobile introuvable.", false);
+}
+
+function setBackupCenterMessage(message, tone = "idle") {
+  if (backupCenterMessage) {
+    backupCenterMessage.textContent = message;
+    backupCenterMessage.dataset.tone = tone;
+  }
+}
+
+async function refreshBackupStatus() {
+  const api = getBackupApi();
+  if (!api) {
+    if (backupStorageHealth) backupStorageHealth.textContent = "Desktop requis";
+    if (backupHealthBadge) {
+      backupHealthBadge.textContent = "Indisponible sur le web";
+      backupHealthBadge.dataset.tone = "error";
+    }
+    return null;
+  }
+
+  try {
+    const status = await api.getBackupStatus();
+    const health = status && status.storage ? status.storage.health : "error";
+    const healthLabels = {
+      healthy: "Stockage sain",
+      recoverable: "Sauvegarde recuperable",
+      empty: "Stockage initial",
+      error: "Attention requise"
+    };
+    const healthLabel = healthLabels[health] || "Etat inconnu";
+    if (backupStorageHealth) backupStorageHealth.textContent = healthLabel;
+    if (backupHealthBadge) {
+      backupHealthBadge.textContent = healthLabel;
+      backupHealthBadge.dataset.tone = health === "healthy" || health === "empty" ? "ready" : "error";
+    }
+    if (backupLatestDate) backupLatestDate.textContent = status.latest ? formatDateTime(status.latest.createdAt) : "Aucune";
+    if (backupLatestFile) backupLatestFile.textContent = status.latest ? status.latest.fileName : "Creation quotidienne active";
+    if (backupCount) backupCount.textContent = String(Number(status.count) || 0);
+    if (backupDataCount) backupDataCount.textContent = String(Number(status.totalItems) || 0);
+    return status;
+  } catch (error) {
+    setBackupCenterMessage(`Diagnostic indisponible : ${error.message || "erreur inconnue"}.`, "error");
+    return null;
+  }
+}
+
+async function createBackupFromInterface() {
+  const api = getBackupApi();
+  if (!api || typeof api.createBackup !== "function") return getDesktopOnlyMessage();
+  try {
+    const result = await api.createBackup("manual");
+    await refreshBackupStatus();
+    const message = result && result.ok ? "Sauvegarde locale JARVIS creee." : "Sauvegarde locale impossible.";
+    setBackupCenterMessage(message, result && result.ok ? "ready" : "error");
+    return message;
+  } catch (error) {
+    const message = `Sauvegarde locale impossible : ${error.message || "erreur inconnue"}.`;
+    setBackupCenterMessage(message, "error");
+    return message;
+  }
+}
+
+async function exportBackupFromInterface() {
+  const api = getBackupApi();
+  if (!api || typeof api.exportBackup !== "function") return getDesktopOnlyMessage();
+  try {
+    const result = await api.exportBackup();
+    if (result && result.canceled) return "Export de la sauvegarde annule.";
+    const message = result && result.ok ? `Sauvegarde exportee : ${result.fileName}.` : "Export de la sauvegarde impossible.";
+    setBackupCenterMessage(message, result && result.ok ? "ready" : "error");
+    return message;
+  } catch (error) {
+    const message = `Export impossible : ${error.message || "erreur inconnue"}.`;
+    setBackupCenterMessage(message, "error");
+    return message;
+  }
+}
+
+async function importBackupFromInterface() {
+  const api = getBackupApi();
+  if (!api || typeof api.importBackup !== "function") return getDesktopOnlyMessage();
+  try {
+    const result = await api.importBackup();
+    if (result && result.canceled) return "Restauration annulee.";
+    if (!result || !result.ok) return "Restauration de la sauvegarde impossible.";
+    await Promise.all([
+      refreshLocalMemory(),
+      refreshOrganization(),
+      refreshPlanningData(),
+      refreshAnalytics(),
+      refreshAutomationSettings(),
+      loadInterfacePreferences(),
+      refreshBackupStatus()
+    ]);
+    const message = `Sauvegarde restauree : ${Number(result.totalItems) || 0} elements locaux recharges.`;
+    setBackupCenterMessage(message, "ready");
+    return message;
+  } catch (error) {
+    const message = `Restauration impossible : ${error.message || "erreur inconnue"}.`;
+    setBackupCenterMessage(message, "error");
+    return message;
+  }
+}
+
+async function diagnoseStorageFromInterface() {
+  const api = getBackupApi();
+  if (!api || typeof api.diagnoseStorage !== "function") return getDesktopOnlyMessage();
+  try {
+    const diagnostic = await api.diagnoseStorage();
+    const labels = {
+      healthy: "Stockage principal valide et operationnel.",
+      recoverable: "Stockage principal a restaurer, sauvegarde valide disponible.",
+      empty: "Stockage local pret pour une premiere utilisation.",
+      error: "Stockage local illisible. Une intervention est requise."
+    };
+    const message = labels[diagnostic.health] || "Diagnostic de stockage termine.";
+    setBackupCenterMessage(message, diagnostic.health === "error" ? "error" : "ready");
+    await refreshBackupStatus();
+    return message;
+  } catch (error) {
+    const message = `Diagnostic impossible : ${error.message || "erreur inconnue"}.`;
+    setBackupCenterMessage(message, "error");
+    return message;
+  }
+}
+
+async function getAboutJarvisMessage() {
+  const api = getBackupApi();
+  if (!api || typeof api.getAppInfo !== "function") return `JARVIS Assistant ${APP_VERSION}, version web/mobile.`;
+  const info = await api.getAppInfo();
+  return `JARVIS Assistant V${info.version}. Electron ${info.electron}, ${info.platform} ${info.architecture}. Mode local actif.`;
 }
 
 function getMemoryApi() {
@@ -3335,6 +3542,9 @@ async function handleCommand(command) {
     message = navigateToSection("settings-panel", "Parametres affiches.");
   } else if (cleanCommand === "parametres avances") {
     message = navigateToSection("advanced-settings-panel", "Parametres avances affiches.");
+  } else if (cleanCommand === "centre sauvegarde" || cleanCommand === "sauvegardes") {
+    await refreshBackupStatus();
+    message = navigateToSection("backup-panel", "Centre de sauvegarde affiche.");
   } else if (cleanCommand === "statut ia") {
     const api = getAiApi();
     message = api && typeof api.getOllamaStatus === "function"
@@ -3556,6 +3766,16 @@ async function handleCommand(command) {
     setSettingsStatus("Panneau parametres affiche");
     window.setTimeout(() => settingsPanel.classList.remove("is-highlighted"), 1800);
     message = "Je m'en occupe. Panneau parametres affiche.";
+  } else if (cleanCommand === "sauvegarde jarvis") {
+    message = await createBackupFromInterface();
+  } else if (cleanCommand === "exporte sauvegarde") {
+    message = await exportBackupFromInterface();
+  } else if (cleanCommand === "importe sauvegarde" || cleanCommand === "restaure sauvegarde") {
+    message = await importBackupFromInterface();
+  } else if (cleanCommand === "diagnostic stockage") {
+    message = await diagnoseStorageFromInterface();
+  } else if (cleanCommand === "a propos jarvis") {
+    message = await getAboutJarvisMessage();
   } else if (cleanCommand === "sauvegarde") {
     message = saveSettings("Reglages sauvegardes manuellement")
       ? "Commande executee. Reglages sauvegardes localement."
@@ -4169,6 +4389,30 @@ safeBindElement(bridgeRotateOnboardingBtn, "click", async () => {
   await refreshBridgeOnboarding();
   respond(message, false);
 });
+safeBindElement(bridgeDeviceList, "click", async (event) => {
+  const button = event.target.closest("[data-bridge-device-id]");
+  if (button) await revokeBridgeDevice(button.dataset.bridgeDeviceId);
+});
+safeBindElement(createBackupBtn, "click", async () => {
+  const message = await createBackupFromInterface();
+  respond(message, false);
+  addHistory("sauvegarde jarvis", message);
+});
+safeBindElement(exportBackupBtn, "click", async () => {
+  const message = await exportBackupFromInterface();
+  respond(message, false);
+  addHistory("exporte sauvegarde", message);
+});
+safeBindElement(importBackupBtn, "click", async () => {
+  const message = await importBackupFromInterface();
+  respond(message, false);
+  addHistory("importe sauvegarde", message);
+});
+safeBindElement(diagnoseStorageBtn, "click", async () => {
+  const message = await diagnoseStorageFromInterface();
+  respond(message, false);
+  addHistory("diagnostic stockage", message);
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && bridgeOnboarding && !bridgeOnboarding.hidden) {
     closeBridgeOnboarding();
@@ -4256,6 +4500,7 @@ refreshPlanningData();
 refreshAnalytics();
 refreshAutomationSettings();
 refreshBridgeOnboarding();
+refreshBackupStatus();
 updateClock();
 updateMetrics();
 updateMobileMode();

@@ -1,7 +1,9 @@
-const { app, BrowserWindow, ipcMain, shell, session } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell, session } = require("electron");
 const { spawn } = require("node:child_process");
 const os = require("node:os");
 const path = require("node:path");
+const QRCode = require("qrcode");
+const { createBackupManager } = require("./backup-manager");
 const { createJarvisBridge } = require("./bridge-server");
 const { createMemoryStore } = require("./memory-store");
 
@@ -23,6 +25,7 @@ const OPENABLE_FOLDERS = {
   desktop: "desktop"
 };
 const MEMORY_FILE_NAME = "jarvis-memory.json";
+const BACKUP_DIRECTORY_NAME = "backups";
 const VOICE_TRANSCRIBE_SCRIPT = path.join(__dirname, "voice", "transcribe.py");
 const VOICE_PYTHON_MISSING_MESSAGE = "Python est introuvable. Installez Python depuis python.org et cochez Add Python to PATH.";
 const VOICE_DEPENDENCIES_MISSING_MESSAGE = "Dependances vocales absentes. Lancez : python -m pip install sounddevice scipy faster-whisper";
@@ -56,6 +59,7 @@ const EMPTY_MEMORY_DATA = {
 };
 let jarvisBridge = null;
 let memoryStore = null;
+let backupManager = null;
 
 app.commandLine.appendSwitch("enable-features", "MediaStream");
 
@@ -157,6 +161,20 @@ function getMemoryStore() {
   return memoryStore;
 }
 
+function getBackupManager() {
+  if (!backupManager) {
+    backupManager = createBackupManager({
+      store: getMemoryStore(),
+      backupDirectory: path.join(app.getPath("userData"), BACKUP_DIRECTORY_NAME),
+      appVersion: app.getVersion(),
+      normalizeData: normalizeMemoryData,
+      retention: 10
+    });
+  }
+
+  return backupManager;
+}
+
 function normalizeMemoryData(data) {
   const memories = Array.isArray(data && data.memories) ? data.memories : [];
   const notes = Array.isArray(data && data.notes) ? data.notes : [];
@@ -245,6 +263,80 @@ async function readMemoryData() {
 
 async function mutateMemoryData(mutator) {
   return getMemoryStore().mutate(mutator);
+}
+
+function countLocalDataItems(data) {
+  return ["memories", "notes", "tasks", "reminders", "dailyLogs", "planning", "focusSessions"]
+    .reduce((total, key) => total + (Array.isArray(data && data[key]) ? data[key].length : 0), 0);
+}
+
+async function getBackupStatus() {
+  const [status, data] = await Promise.all([
+    getBackupManager().getStatus(),
+    readMemoryData()
+  ]);
+  return {
+    ...status,
+    totalItems: countLocalDataItems(data),
+    version: app.getVersion()
+  };
+}
+
+async function createJarvisBackup(label = "manual") {
+  const backup = await getBackupManager().create(label);
+  return { ...backup, message: "Sauvegarde locale JARVIS creee." };
+}
+
+async function exportJarvisBackup(event) {
+  const window = getWindowFromEvent(event);
+  const date = getLocalDateKey();
+  const selection = await dialog.showSaveDialog(window || undefined, {
+    title: "Exporter une sauvegarde JARVIS",
+    defaultPath: path.join(app.getPath("documents"), `jarvis-backup-${date}.json`),
+    filters: [{ name: "Sauvegarde JARVIS", extensions: ["json"] }]
+  });
+  if (selection.canceled || !selection.filePath) return { ok: false, canceled: true };
+
+  const backup = await getBackupManager().exportTo(selection.filePath);
+  return { ...backup, message: "Sauvegarde JARVIS exportee." };
+}
+
+async function importJarvisBackup(event) {
+  const window = getWindowFromEvent(event);
+  const selection = await dialog.showOpenDialog(window || undefined, {
+    title: "Restaurer une sauvegarde JARVIS",
+    properties: ["openFile"],
+    filters: [{ name: "Sauvegarde JARVIS", extensions: ["json"] }]
+  });
+  if (selection.canceled || !selection.filePaths[0]) return { ok: false, canceled: true };
+
+  const confirmation = await dialog.showMessageBox(window || undefined, {
+    type: "warning",
+    buttons: ["Annuler", "Restaurer"],
+    defaultId: 0,
+    cancelId: 0,
+    title: "Confirmer la restauration",
+    message: "Restaurer cette sauvegarde JARVIS ?",
+    detail: "Une copie de securite de vos donnees actuelles sera creee avant la restauration."
+  });
+  if (confirmation.response !== 1) return { ok: false, canceled: true };
+
+  const result = await getBackupManager().importFrom(selection.filePaths[0]);
+  return {
+    ...result,
+    totalItems: countLocalDataItems(result.data),
+    message: "Sauvegarde JARVIS restauree. Les donnees locales ont ete rechargees."
+  };
+}
+
+async function ensureDailyBackup() {
+  const status = await getBackupManager().getStatus();
+  const latestDate = status.latest && status.latest.createdAt
+    ? getLocalDateKey(new Date(status.latest.createdAt))
+    : null;
+  if (latestDate !== getLocalDateKey()) {
+    await createJarvisBackup("startup");
+  }
 }
 
 function sanitizeLocalText(content, maxLength = 1200) {
@@ -1186,6 +1278,33 @@ async function transcribeVoiceLocal() {
   return pyResult.reason === "python-missing" ? pythonResult : pyResult;
 }
 
+async function getBridgeQrCode() {
+  const status = jarvisBridge ? jarvisBridge.getStatus() : null;
+  const address = status && Array.isArray(status.addresses) ? status.addresses[0] : "";
+  if (!status || !status.running || !address) {
+    return { ok: false, message: "Adresse Bridge indisponible." };
+  }
+
+  const dataUrl = await QRCode.toDataURL(address, {
+    width: 320,
+    margin: 1,
+    color: { dark: "#07111b", light: "#e8f6ff" }
+  });
+  return { ok: true, address, dataUrl };
+}
+
+function getAppInfo() {
+  return {
+    ok: true,
+    name: APP_TITLE,
+    version: app.getVersion(),
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    platform: process.platform,
+    architecture: process.arch
+  };
+}
+
 function registerAiIpcHandlers() {
   ipcMain.handle("ask-ollama", (_event, message) => askJarvisOllama(message));
   ipcMain.handle("jarvis:get-ollama-config", () => getOllamaConfig());
@@ -1235,12 +1354,22 @@ function registerAiIpcHandlers() {
   ipcMain.handle("preferences:get", () => getPreferences());
   ipcMain.handle("preferences:update", (_event, key, value) => updatePreference(key, value));
   ipcMain.handle("preferences:reset", () => resetPreferences());
+  ipcMain.handle("backup:get-status", () => getBackupStatus());
+  ipcMain.handle("backup:create", (_event, label) => createJarvisBackup(label));
+  ipcMain.handle("backup:export", (event) => exportJarvisBackup(event));
+  ipcMain.handle("backup:import", (event) => importJarvisBackup(event));
+  ipcMain.handle("storage:diagnose", () => getMemoryStore().diagnose());
   ipcMain.handle("bridge:get-status", () => jarvisBridge
     ? jarvisBridge.getStatus()
-    : { ok: false, running: false, addresses: [], pairingCode: "", connectedDevices: 0 });
+    : { ok: false, running: false, addresses: [], pairingCode: "", connectedDevices: 0, devices: [] });
   ipcMain.handle("bridge:rotate-code", () => jarvisBridge
     ? jarvisBridge.rotatePairingCode()
     : { ok: false, running: false, message: "Bridge JARVIS indisponible." });
+  ipcMain.handle("bridge:get-qr", () => getBridgeQrCode());
+  ipcMain.handle("bridge:revoke-device", (_event, deviceId) => jarvisBridge
+    ? jarvisBridge.revokeDevice(deviceId)
+    : { ok: false, revoked: false, devices: [] });
+  ipcMain.handle("jarvis:get-app-info", () => getAppInfo());
 }
 
 async function startJarvisBridge() {
@@ -1320,6 +1449,7 @@ function createMainWindow() {
     minWidth: 960,
     minHeight: 680,
     title: APP_TITLE,
+    icon: path.join(__dirname, "assets", "icons", "icon-512.png"),
     backgroundColor: "#020817",
     autoHideMenuBar: true,
     webPreferences: {
@@ -1360,6 +1490,7 @@ app.whenReady().then(async () => {
   configurePermissions();
   registerAiIpcHandlers();
   registerDesktopIpcHandlers();
+  await ensureDailyBackup().catch((error) => console.error("[JARVIS backup] Sauvegarde quotidienne impossible:", error));
   await startJarvisBridge();
   createMainWindow();
 

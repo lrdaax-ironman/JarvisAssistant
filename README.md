@@ -57,7 +57,7 @@ Notes :
 - La version mobile utilise `localStorage` pour les notes, taches, rappels, planning, memoire et preferences simples.
 - `mobile.js` ne depend pas de `window.jarvisAPI` et reste stable dans un navigateur mobile.
 - Le service worker est enregistre uniquement en contexte web `http` ou `https`, pas en `file://` Electron.
-- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v3` utilise une strategie network-first pour les fichiers d'interface.
+- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v4` utilise une strategie network-first pour les fichiers d'interface.
 
 ## Consolidation V4.3
 
@@ -78,7 +78,31 @@ Les tests locaux peuvent etre lances avec :
 npm.cmd test
 ```
 
-## Bridge local V4.3
+## Fiabilite et controle local V4.4
+
+La V4.4 ajoute :
+
+- un centre de sauvegarde local avec creation quotidienne ;
+- l'export et la restauration de sauvegardes JSON versionnees ;
+- une copie de securite automatique avant chaque restauration ;
+- un diagnostic visible du stockage principal et de sa sauvegarde ;
+- un QR code local pour ouvrir le Bridge sur telephone ;
+- la liste des appareils mobiles associes et leur revocation immediate ;
+- un code d'association masque et absent des journaux console ;
+- une icone JARVIS pour la fenetre et l'installateur Windows.
+
+Commandes V4.4 :
+
+```text
+centre sauvegarde
+sauvegarde jarvis
+exporte sauvegarde
+importe sauvegarde
+diagnostic stockage
+a propos jarvis
+```
+
+## Bridge local V4.4
 
 Le Bridge relie un telephone a JARVIS desktop sans API externe. Il est lance automatiquement avec Electron et reste limite au reseau local.
 

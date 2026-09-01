@@ -92,3 +92,17 @@ test("echoue sans remplacer le fichier principal lorsqu'une ecriture atomique es
   }), /Ecriture refusee/);
   assert.equal(JSON.parse(await fs.readFile(filePath, "utf8")).counter, 7);
 });
+
+test("fournit un diagnostic sans exposer ni modifier les donnees", async (t) => {
+  const fixture = await createFixture();
+  t.after(() => fs.rm(fixture.directory, { recursive: true, force: true }));
+  await fixture.store.write({ tasks: [], counter: 2 });
+  await fixture.store.write({ tasks: [], counter: 3 });
+
+  const diagnostic = await fixture.store.diagnose();
+  assert.equal(diagnostic.health, "healthy");
+  assert.equal(diagnostic.primary.valid, true);
+  assert.equal(diagnostic.backup.valid, true);
+  assert.equal(diagnostic.corrupt.exists, false);
+  assert.equal((await fixture.store.read()).counter, 3);
+});

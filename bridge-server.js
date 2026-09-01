@@ -15,6 +15,7 @@ const PUBLIC_FILES = new Map([
   ["/mobile.html", "mobile.html"],
   ["/mobile.css", "mobile.css"],
   ["/mobile.js", "mobile.js"],
+  ["/mobile-command-routing.js", "mobile-command-routing.js"],
   ["/manifest.json", "manifest.json"],
   ["/service-worker.js", "service-worker.js"],
   ["/assets/icons/icon-192.png", path.join("assets", "icons", "icon-192.png")],
@@ -116,7 +117,7 @@ function createJarvisBridge(options = {}) {
     ? requestedPort
     : DEFAULT_PORT;
   const host = options.host || "0.0.0.0";
-  const version = sanitizeText(options.version, 40) || "4.3.0";
+  const version = sanitizeText(options.version, 40) || "4.4.0";
   const model = sanitizeText(options.model, 120) || "llama3.2:3b";
   const sessions = new Map();
   const pairingAttempts = new Map();
@@ -215,17 +216,25 @@ function createJarvisBridge(options = {}) {
     return state.count > MAX_PAIRING_ATTEMPTS;
   }
 
-  function createSession() {
+  function createSession(device = {}) {
     const token = crypto.randomBytes(32).toString("base64url");
+    const now = Date.now();
     const expiresAt = Date.now() + SESSION_DURATION_MS;
-    sessions.set(hashToken(token), expiresAt);
+    sessions.set(hashToken(token), {
+      id: crypto.randomUUID(),
+      name: sanitizeText(device.name, 80) || "Appareil mobile",
+      platform: sanitizeText(device.platform, 80) || "Navigateur mobile",
+      createdAt: now,
+      lastSeenAt: now,
+      expiresAt
+    });
     return { token, expiresAt: new Date(expiresAt).toISOString() };
   }
 
   function pruneSessions() {
     const now = Date.now();
-    sessions.forEach((expiresAt, tokenHash) => {
-      if (expiresAt <= now) sessions.delete(tokenHash);
+    sessions.forEach((device, tokenHash) => {
+      if (device.expiresAt <= now) sessions.delete(tokenHash);
     });
   }
 
@@ -234,12 +243,40 @@ function createJarvisBridge(options = {}) {
     return authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
   }
 
-  function isAuthorized(request) {
+  function getAuthorizedSession(request, touch = true) {
     pruneSessions();
     const token = getBearerToken(request);
-    if (!token) return false;
-    const expiresAt = sessions.get(hashToken(token));
-    return Boolean(expiresAt && expiresAt > Date.now());
+    if (!token) return null;
+    const device = sessions.get(hashToken(token));
+    if (!device || device.expiresAt <= Date.now()) return null;
+    if (touch) device.lastSeenAt = Date.now();
+    return device;
+  }
+
+  function listDevices() {
+    pruneSessions();
+    return [...sessions.values()]
+      .sort((left, right) => right.lastSeenAt - left.lastSeenAt)
+      .map((device) => ({
+        id: device.id,
+        name: device.name,
+        platform: device.platform,
+        createdAt: new Date(device.createdAt).toISOString(),
+        lastSeenAt: new Date(device.lastSeenAt).toISOString(),
+        expiresAt: new Date(device.expiresAt).toISOString()
+      }));
+  }
+
+  function revokeDevice(deviceId) {
+    const safeDeviceId = sanitizeText(deviceId, 120);
+    let revoked = false;
+    sessions.forEach((device, tokenHash) => {
+      if (device.id === safeDeviceId) {
+        sessions.delete(tokenHash);
+        revoked = true;
+      }
+    });
+    return { ok: revoked, revoked, devices: listDevices() };
   }
 
   async function servePublicFile(request, response, pathname) {
@@ -312,7 +349,7 @@ function createJarvisBridge(options = {}) {
         version,
         model,
         hostname: os.hostname(),
-        authenticated: isAuthorized(request),
+        authenticated: Boolean(getAuthorizedSession(request)),
         requiresPairing: true
       });
       return true;
@@ -331,7 +368,7 @@ function createJarvisBridge(options = {}) {
       }
 
       pairingAttempts.delete(getClientId(request));
-      const session = createSession();
+      const session = createSession(body.device || {});
       pairingCode = createPairingCode();
       sendJson(response, 200, { ok: true, ...session });
       return true;
@@ -339,7 +376,7 @@ function createJarvisBridge(options = {}) {
 
     if (!pathname.startsWith("/bridge/")) return false;
 
-    if (!isAuthorized(request)) {
+    if (!getAuthorizedSession(request)) {
       sendJson(response, 401, { ok: false, message: "Association requise ou expiree." });
       return true;
     }
@@ -441,7 +478,6 @@ function createJarvisBridge(options = {}) {
     });
 
     console.log(`[JARVIS Bridge] Actif sur le port ${port}.`);
-    console.log(`[JARVIS Bridge] Code d'association : ${pairingCode}`);
     getLocalAddresses(port).forEach((address) => console.log(`[JARVIS Bridge] Mobile : ${address}`));
     return getStatus();
   }
@@ -470,12 +506,15 @@ function createJarvisBridge(options = {}) {
       pairingCode,
       addresses: getLocalAddresses(port),
       connectedDevices: sessions.size,
+      devices: listDevices(),
       lastError
     };
   }
 
   return {
     getStatus,
+    listDevices,
+    revokeDevice,
     rotatePairingCode,
     start,
     stop
