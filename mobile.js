@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "4.4.0 mobile";
+  const APP_VERSION = "4.5.0 mobile";
   const STORAGE_PREFIX = "jarvis-mobile:";
   const BRIDGE_TOKEN_KEY = `${STORAGE_PREFIX}bridge-token`;
   const DESKTOP_ONLY_COMMANDS = new Set([
@@ -532,7 +532,7 @@
   }
 
   function showHelp() {
-    setResponse("Aide mobile", "JARVIS fonctionne seul ou connecte au desktop avec le Bridge V4.4.", [
+    setResponse("Aide mobile", "JARVIS fonctionne seul ou connecte au desktop avec le Bridge V4.5.", [
       "bridge statut",
       "ajoute tache finir Jarvis",
       "termine tache Jarvis",

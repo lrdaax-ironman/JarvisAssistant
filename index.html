@@ -53,6 +53,7 @@
         <span id="briefing-mode-badge" class="mode-badge briefing-mode-badge">BRIEFING ACTIF</span>
         <span id="analytics-mode-badge" class="mode-badge analytics-mode-badge">ANALYTICS LOCAUX</span>
         <span id="automation-mode-badge" class="mode-badge automation-mode-badge">AUTOMATISATIONS ACTIVES</span>
+        <span id="proactive-mode-badge" class="mode-badge proactive-mode-badge">MODE PROACTIF</span>
         <span id="mobile-mode-badge" class="mode-badge mobile-mode-badge" hidden>MODE MOBILE</span>
       </div>
 
@@ -90,12 +91,13 @@
         <button type="button" data-nav-target="modules-panel"><span>MO</span>Modules</button>
         <button type="button" data-nav-target="organization-panel"><span>OR</span>Organisation</button>
         <button type="button" data-nav-target="automation-panel"><span>AU</span>Automatisations</button>
+        <button type="button" data-nav-target="notification-panel"><span>NO</span>Notifications <em id="notification-nav-count">0</em></button>
         <button type="button" data-nav-target="memory-panel"><span>ME</span>Memoire</button>
         <button type="button" data-command-center-tab="system"><span>SY</span>Systeme</button>
         <button type="button" data-nav-target="profiles-panel"><span>PR</span>Modes</button>
         <button type="button" data-nav-target="settings-panel"><span>PA</span>Parametres</button>
         <button type="button" data-command="version mobile"><span>PW</span>Version mobile</button>
-        <small>JARVIS v4.4.0</small>
+        <small>JARVIS v4.5.0</small>
       </aside>
 
       <div class="main-content">
@@ -152,6 +154,11 @@
           <li><button type="button" data-command="sauvegarde jarvis">sauvegarde jarvis</button></li>
           <li><button type="button" data-command="exporte sauvegarde">exporte sauvegarde</button></li>
           <li><button type="button" data-command="diagnostic stockage">diagnostic stockage</button></li>
+          <li><button type="button" data-command="centre notifications">centre notifications</button></li>
+          <li><button type="button" data-command="statut proactif">statut proactif</button></li>
+          <li><button type="button" data-command="active notifications">active notifications</button></li>
+          <li><button type="button" data-command="lancement automatique">lancement automatique</button></li>
+          <li><button type="button" data-command="mode arriere-plan">mode arriere-plan</button></li>
           <li><button type="button" data-command="reset parametres">reset parametres</button></li>
           <li><button type="button" data-command="modules">modules</button></li>
           <li><button type="button" data-command="accueil">accueil</button></li>
@@ -586,6 +593,13 @@
             <span>Rappels</span>
             <strong id="command-status-reminders">0</strong>
             <small>Aujourd'hui</small>
+          </article>
+
+          <article class="dashboard-card dashboard-card-wide notification-quick-card">
+            <span>Notifications</span>
+            <strong id="command-status-notifications">0 non lue</strong>
+            <small id="command-status-background">Arriere-plan actif</small>
+            <button class="mini-action-btn" type="button" data-nav-target="notification-panel">Ouvrir le centre</button>
           </article>
 
           <article class="dashboard-card dashboard-card-wide">
@@ -1187,6 +1201,7 @@
 
       <div class="advanced-actions">
         <button type="button" data-command="centre sauvegarde">Centre sauvegarde</button>
+        <button type="button" data-command="centre notifications">Centre notifications</button>
         <button type="button" data-command="reset jarvis">Reset interface</button>
         <button type="button" data-command="reset voix">Reset voix</button>
         <button type="button" data-command="reset automatisations">Reset automatisations</button>
@@ -1244,6 +1259,55 @@
       <p id="backup-center-message" class="backup-center-message">Les sauvegardes restent sur ce PC. Une copie de securite est creee avant chaque restauration.</p>
     </section>
 
+    <section id="notification-panel" class="panel notification-center-panel" aria-labelledby="notification-title">
+      <div class="notification-center-header">
+        <div class="panel-heading">
+          <span>17</span>
+          <h2 id="notification-title">Centre de notifications</h2>
+        </div>
+        <small id="notification-center-badge" data-tone="active">Mode proactif actif</small>
+      </div>
+
+      <div class="notification-status-grid">
+        <article>
+          <span>Non lues</span>
+          <strong id="notification-unread-count">0</strong>
+          <small>Alertes a consulter</small>
+        </article>
+        <article>
+          <span>Rappels actifs</span>
+          <strong id="notification-active-count">0</strong>
+          <small>Actions disponibles</small>
+        </article>
+        <article>
+          <span>Notifications Windows</span>
+          <strong id="notification-windows-state">Activees</strong>
+          <small id="notification-windows-detail">Prises en charge</small>
+        </article>
+        <article>
+          <span>Demarrage Windows</span>
+          <strong id="notification-startup-state">Desactive</strong>
+          <small id="notification-startup-detail">Version installee</small>
+        </article>
+      </div>
+
+      <div class="proactive-controls" aria-label="Reglages proactifs">
+        <button id="toggle-windows-notifications-btn" type="button">Desactiver les notifications</button>
+        <button id="toggle-startup-btn" type="button">Activer au demarrage</button>
+        <button id="toggle-close-to-tray-btn" type="button">Fermer vers le tray : actif</button>
+        <button id="mark-notifications-read-btn" type="button">Tout marquer comme lu</button>
+      </div>
+
+      <div id="notification-list" class="notification-list" aria-live="polite">
+        <p>Aucune notification locale.</p>
+      </div>
+
+      <div class="notification-center-footer">
+        <p>JARVIS surveille les rappels tant que son icone reste presente dans la zone de notification Windows.</p>
+        <button id="clear-notifications-btn" type="button">Vider le centre</button>
+      </div>
+    </section>
+
     <section id="history-panel" class="history" aria-labelledby="history-title">
       <div class="history-header">
         <div class="panel-heading">
@@ -1267,7 +1331,7 @@
     <article class="bridge-onboarding-dialog">
       <header>
         <div>
-          <span class="bridge-onboarding-kicker">JARVIS V4.4</span>
+          <span class="bridge-onboarding-kicker">JARVIS V4.5</span>
           <h2 id="bridge-onboarding-title">Connecter un mobile</h2>
           <p>Reliez votre telephone a JARVIS desktop sur le meme reseau Wi-Fi.</p>
         </div>

@@ -57,7 +57,7 @@ Notes :
 - La version mobile utilise `localStorage` pour les notes, taches, rappels, planning, memoire et preferences simples.
 - `mobile.js` ne depend pas de `window.jarvisAPI` et reste stable dans un navigateur mobile.
 - Le service worker est enregistre uniquement en contexte web `http` ou `https`, pas en `file://` Electron.
-- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v4` utilise une strategie network-first pour les fichiers d'interface.
+- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v5` utilise une strategie network-first pour les fichiers d'interface.
 
 ## Consolidation V4.3
 
@@ -102,7 +102,37 @@ diagnostic stockage
 a propos jarvis
 ```
 
-## Bridge local V4.4
+## Mode proactif Windows V4.5
+
+La V4.5 permet a JARVIS de rester utile lorsque sa fenetre est masquee :
+
+- icone JARVIS dans la zone de notification Windows ;
+- fermeture de la fenetre vers le tray sans interrompre les rappels ;
+- verification des rappels dans le processus principal Electron ;
+- notifications Windows avec actions `Terminer` et `Reporter 10 min` ;
+- centre de notifications local et persistant ;
+- compteurs de notifications non lues et rappels actifs ;
+- lancement automatique configurable pour la version installee ;
+- verrou d'instance unique pour eviter deux JARVIS en parallele.
+
+Commandes V4.5 :
+
+```text
+centre notifications
+mes notifications
+statut proactif
+active notifications
+desactive notifications
+lancement automatique
+desactive lancement automatique
+mode arriere-plan
+desactive mode arriere-plan
+marque notifications lues
+```
+
+La croix de la fenetre masque JARVIS dans le tray quand le mode arriere-plan est actif. La commande `ferme jarvis` ou l'action `Quitter JARVIS` du tray arrete completement l'application.
+
+## Bridge local V4.5
 
 Le Bridge relie un telephone a JARVIS desktop sans API externe. Il est lance automatiquement avec Electron et reste limite au reseau local.
 

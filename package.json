@@ -1,6 +1,6 @@
 {
   "name": "jarvis-assistant",
-  "version": "4.4.0",
+  "version": "4.5.0",
   "description": "Application desktop Windows JARVIS Assistant en HTML, CSS et JavaScript vanilla avec Electron.",
   "main": "main.js",
   "private": true,
@@ -39,6 +39,7 @@
       "backup-manager.js",
       "bridge-server.js",
       "memory-store.js",
+      "proactive-manager.js",
       "main.js",
       "preload.js",
       "manifest.json",

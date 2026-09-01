@@ -19,7 +19,7 @@ async function createFixture() {
   const manager = createBackupManager({
     store,
     backupDirectory: path.join(directory, "backups"),
-    appVersion: "4.4.0-test",
+    appVersion: "4.5.0-test",
     normalizeData: (data) => ({
       tasks: Array.isArray(data && data.tasks) ? data.tasks : [],
       notes: Array.isArray(data && data.notes) ? data.notes : []
@@ -31,7 +31,7 @@ async function createFixture() {
 test("cree et inventorie une sauvegarde locale versionnee", async (t) => {
   const fixture = await createFixture();
   t.after(() => fs.rm(fixture.directory, { recursive: true, force: true }));
-  await fixture.store.write({ tasks: [{ id: "1", title: "Tester V4.4" }], notes: [] });
+  await fixture.store.write({ tasks: [{ id: "1", title: "Tester V4.5" }], notes: [] });
 
   const backup = await fixture.manager.create("manual");
   const payload = JSON.parse(await fs.readFile(backup.path, "utf8"));
@@ -39,8 +39,8 @@ test("cree et inventorie une sauvegarde locale versionnee", async (t) => {
 
   assert.equal(payload.format, "jarvis-assistant-backup");
   assert.equal(payload.schemaVersion, 1);
-  assert.equal(payload.appVersion, "4.4.0-test");
-  assert.equal(payload.data.tasks[0].title, "Tester V4.4");
+  assert.equal(payload.appVersion, "4.5.0-test");
+  assert.equal(payload.data.tasks[0].title, "Tester V4.5");
   assert.equal(status.count, 1);
   assert.equal(status.storage.health, "healthy");
 });

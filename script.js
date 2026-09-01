@@ -46,6 +46,23 @@ const createBackupBtn = $("create-backup-btn");
 const exportBackupBtn = $("export-backup-btn");
 const importBackupBtn = $("import-backup-btn");
 const diagnoseStorageBtn = $("diagnose-storage-btn");
+const proactiveModeBadge = $("proactive-mode-badge");
+const notificationNavCount = $("notification-nav-count");
+const commandStatusNotifications = $("command-status-notifications");
+const commandStatusBackground = $("command-status-background");
+const notificationCenterBadge = $("notification-center-badge");
+const notificationUnreadCount = $("notification-unread-count");
+const notificationActiveCount = $("notification-active-count");
+const notificationWindowsState = $("notification-windows-state");
+const notificationWindowsDetail = $("notification-windows-detail");
+const notificationStartupState = $("notification-startup-state");
+const notificationStartupDetail = $("notification-startup-detail");
+const notificationList = $("notification-list");
+const toggleWindowsNotificationsBtn = $("toggle-windows-notifications-btn");
+const toggleStartupBtn = $("toggle-startup-btn");
+const toggleCloseToTrayBtn = $("toggle-close-to-tray-btn");
+const markNotificationsReadBtn = $("mark-notifications-read-btn");
+const clearNotificationsBtn = $("clear-notifications-btn");
 
 const currentTime = $("current-time");
 const currentDate = $("current-date");
@@ -184,7 +201,7 @@ const SETTINGS_STORAGE_KEY = "jarvisAssistant.settings.v2";
 const HISTORY_STORAGE_KEY = "jarvisAssistant.history.v2";
 const HISTORY_LIMIT = 20;
 const LOCAL_AI_MODEL = "llama3.2:3b";
-const APP_VERSION = "V4.4.0";
+const APP_VERSION = "V4.5.0";
 const DEFAULT_SETTINGS = {
   voiceName: "",
   voiceLang: "",
@@ -451,6 +468,16 @@ const availableCommands = [
   "importe sauvegarde",
   "diagnostic stockage",
   "a propos jarvis",
+  "centre notifications",
+  "mes notifications",
+  "statut proactif",
+  "active notifications",
+  "desactive notifications",
+  "lancement automatique",
+  "desactive lancement automatique",
+  "mode arriere-plan",
+  "desactive mode arriere-plan",
+  "marque notifications lues",
   "fonctionnalites mobile",
   "fonctionnalites desktop",
   "reduis animations",
@@ -508,6 +535,17 @@ let weeklySummary = null;
 let productivityScore = null;
 let activeCommandCategory = "ai";
 let interfacePreferences = { ...DEFAULT_INTERFACE_PREFERENCES };
+let notificationEntries = [];
+let proactiveStatus = {
+  backgroundActive: false,
+  closeToTray: true,
+  notificationsEnabled: true,
+  notificationsSupported: false,
+  launchAtStartup: false,
+  launchAtStartupActive: false,
+  packaged: false,
+  snoozeMinutes: 10
+};
 let automationSettings = {
   startupBriefing: false,
   workModeAutomation: false,
@@ -731,7 +769,7 @@ function getWebStatusMessage() {
 
 async function getBridgeStatusMessage(detail = "status") {
   const api = getBridgeApi();
-  if (!api) return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.4.";
+  if (!api) return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.5.";
 
   try {
     const status = await api.getBridgeStatus();
@@ -766,7 +804,7 @@ async function getBridgeStatusMessage(detail = "status") {
 async function rotateBridgePairingCode() {
   const api = getBridgeApi();
   if (!api || typeof api.rotateBridgeCode !== "function") {
-    return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.4.";
+    return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.5.";
   }
 
   try {
@@ -781,7 +819,7 @@ async function rotateBridgePairingCode() {
 
 function getBridgeHelpMessage() {
   return [
-    "Bridge JARVIS V4.4 : ouvrez Version mobile dans le header pour lancer le guide de connexion.",
+    "Bridge JARVIS V4.5 : ouvrez Version mobile dans le header pour lancer le guide de connexion.",
     "Connectez le PC et le telephone au meme Wi-Fi, ouvrez l'adresse affichee, puis revelez le code d'association.",
     "Le Bridge donne acces a Ollama et aux donnees d'organisation locales, sans exposer les commandes Windows a distance."
   ].join("\n");
@@ -810,6 +848,10 @@ function getBridgeApi() {
 
 function getBackupApi() {
   return aiApi && typeof aiApi.getBackupStatus === "function" ? aiApi : null;
+}
+
+function getProactiveApi() {
+  return aiApi && typeof aiApi.listNotifications === "function" ? aiApi : null;
 }
 
 let bridgeCodeVisible = false;
@@ -1048,7 +1090,8 @@ async function importBackupFromInterface() {
       refreshAnalytics(),
       refreshAutomationSettings(),
       loadInterfacePreferences(),
-      refreshBackupStatus()
+      refreshBackupStatus(),
+      refreshNotificationCenter()
     ]);
     const message = `Sauvegarde restauree : ${Number(result.totalItems) || 0} elements locaux recharges.`;
     setBackupCenterMessage(message, "ready");
@@ -1087,6 +1130,181 @@ async function getAboutJarvisMessage() {
   if (!api || typeof api.getAppInfo !== "function") return `JARVIS Assistant ${APP_VERSION}, version web/mobile.`;
   const info = await api.getAppInfo();
   return `JARVIS Assistant V${info.version}. Electron ${info.electron}, ${info.platform} ${info.architecture}. Mode local actif.`;
+}
+
+function getNotificationStatusLabel(status) {
+  return {
+    active: "Action requise",
+    completed: "Termine",
+    snoozed: "Reporte",
+    read: "Lu"
+  }[status] || "Information";
+}
+
+function renderNotificationList() {
+  if (!notificationList) return;
+  notificationList.textContent = "";
+  if (!notificationEntries.length) {
+    const empty = document.createElement("p");
+    empty.className = "notification-empty-state";
+    empty.textContent = "Aucune notification locale.";
+    notificationList.appendChild(empty);
+    return;
+  }
+
+  notificationEntries.forEach((notification) => {
+    const item = document.createElement("article");
+    const header = document.createElement("header");
+    const title = document.createElement("strong");
+    const date = document.createElement("time");
+    const message = document.createElement("p");
+    const footer = document.createElement("footer");
+    const state = document.createElement("small");
+    const actions = document.createElement("div");
+
+    item.className = `notification-item${notification.readAt ? "" : " is-unread"}`;
+    title.textContent = notification.title || "JARVIS";
+    date.textContent = formatDateTime(notification.createdAt);
+    date.dateTime = notification.createdAt || "";
+    message.textContent = notification.message || "Notification locale";
+    state.textContent = getNotificationStatusLabel(notification.status);
+    state.dataset.tone = notification.status || "read";
+    actions.className = "notification-item-actions";
+
+    if (notification.type === "reminder" && notification.status === "active" && notification.entityId) {
+      const completeButton = document.createElement("button");
+      const snoozeButton = document.createElement("button");
+      completeButton.type = "button";
+      completeButton.textContent = "Terminer";
+      completeButton.dataset.notificationAction = "complete";
+      snoozeButton.type = "button";
+      snoozeButton.textContent = `Reporter ${proactiveStatus.snoozeMinutes || 10} min`;
+      snoozeButton.dataset.notificationAction = "snooze";
+      [completeButton, snoozeButton].forEach((button) => {
+        button.dataset.notificationId = notification.id || "";
+        button.dataset.reminderId = notification.entityId || "";
+      });
+      actions.append(completeButton, snoozeButton);
+    }
+
+    if (!notification.readAt) {
+      const readButton = document.createElement("button");
+      readButton.type = "button";
+      readButton.textContent = "Marquer lu";
+      readButton.dataset.notificationAction = "read";
+      readButton.dataset.notificationId = notification.id || "";
+      actions.appendChild(readButton);
+    }
+
+    header.append(title, date);
+    footer.append(state, actions);
+    item.append(header, message, footer);
+    notificationList.appendChild(item);
+  });
+}
+
+function updateProactiveDashboard(listResult = {}) {
+  const unread = Number(listResult.unread) || 0;
+  const active = Number(listResult.active) || 0;
+  if (notificationUnreadCount) notificationUnreadCount.textContent = String(unread);
+  if (notificationActiveCount) notificationActiveCount.textContent = String(active);
+  if (notificationNavCount) {
+    notificationNavCount.textContent = String(unread);
+    notificationNavCount.hidden = unread === 0;
+  }
+  if (commandStatusNotifications) commandStatusNotifications.textContent = `${unread} non lue${unread > 1 ? "s" : ""}`;
+  if (commandStatusBackground) commandStatusBackground.textContent = proactiveStatus.backgroundActive ? "Arriere-plan actif" : "Arriere-plan inactif";
+  if (notificationWindowsState) notificationWindowsState.textContent = proactiveStatus.notificationsEnabled ? "Activees" : "Desactivees";
+  if (notificationWindowsDetail) notificationWindowsDetail.textContent = proactiveStatus.notificationsSupported ? "Prises en charge" : "Non prises en charge";
+  if (notificationStartupState) notificationStartupState.textContent = proactiveStatus.launchAtStartup ? "Active" : "Desactive";
+  if (notificationStartupDetail) {
+    notificationStartupDetail.textContent = proactiveStatus.packaged
+      ? proactiveStatus.launchAtStartupActive ? "Enregistre dans Windows" : "Application installee"
+      : "Actif apres installation";
+  }
+  if (notificationCenterBadge) {
+    notificationCenterBadge.textContent = proactiveStatus.backgroundActive ? "Mode proactif actif" : "Mode proactif indisponible";
+    notificationCenterBadge.dataset.tone = proactiveStatus.backgroundActive ? "active" : "error";
+  }
+  if (proactiveModeBadge) proactiveModeBadge.hidden = !proactiveStatus.backgroundActive;
+  if (toggleWindowsNotificationsBtn) {
+    toggleWindowsNotificationsBtn.textContent = proactiveStatus.notificationsEnabled ? "Desactiver les notifications" : "Activer les notifications";
+  }
+  if (toggleStartupBtn) {
+    toggleStartupBtn.textContent = proactiveStatus.launchAtStartup ? "Desactiver au demarrage" : "Activer au demarrage";
+  }
+  if (toggleCloseToTrayBtn) {
+    toggleCloseToTrayBtn.textContent = `Fermer vers le tray : ${proactiveStatus.closeToTray ? "actif" : "inactif"}`;
+  }
+  renderNotificationList();
+}
+
+async function refreshNotificationCenter(preloadedResult = null) {
+  const api = getProactiveApi();
+  if (!api) {
+    proactiveStatus = { ...proactiveStatus, backgroundActive: false };
+    notificationEntries = [];
+    updateProactiveDashboard({ unread: 0, active: 0 });
+    return null;
+  }
+
+  try {
+    const [listResult, statusResult] = await Promise.all([
+      preloadedResult || api.listNotifications(100),
+      api.getProactiveStatus()
+    ]);
+    notificationEntries = listResult && Array.isArray(listResult.notifications) ? listResult.notifications : [];
+    proactiveStatus = { ...proactiveStatus, ...(statusResult || {}) };
+    updateProactiveDashboard(listResult || {});
+    return { listResult, statusResult };
+  } catch (_error) {
+    proactiveStatus = { ...proactiveStatus, backgroundActive: false };
+    updateProactiveDashboard({ unread: 0, active: 0 });
+    return null;
+  }
+}
+
+async function setProactiveSetting(key, value) {
+  const api = getProactiveApi();
+  if (!api || typeof api.updateProactiveSetting !== "function") return getDesktopOnlyMessage();
+  const result = await api.updateProactiveSetting(key, value);
+  await refreshNotificationCenter();
+  if (!result || !result.ok) return result && result.message ? result.message : "Reglage proactif indisponible.";
+  if (key === "notificationsEnabled") return value ? "Notifications Windows activees." : "Notifications Windows desactivees.";
+  if (key === "launchAtStartup") {
+    return value
+      ? proactiveStatus.packaged ? "Lancement automatique Windows active." : "Lancement automatique enregistre. Il sera applique a la version installee."
+      : "Lancement automatique Windows desactive.";
+  }
+  return value ? "Mode arriere-plan actif." : "Fermeture vers le tray desactivee.";
+}
+
+async function runNotificationAction(action, reminderId, notificationId) {
+  const api = getProactiveApi();
+  if (!api) return getDesktopOnlyMessage();
+  let result;
+  if (action === "complete") {
+    result = await api.completeReminderFromNotification(reminderId, notificationId);
+  } else if (action === "snooze") {
+    result = await api.snoozeReminderFromNotification(reminderId, notificationId);
+  } else {
+    result = await api.markNotificationRead(notificationId);
+  }
+  await Promise.all([refreshNotificationCenter(), refreshOrganization()]);
+  if (!result || !result.ok) return result && result.message ? result.message : "Action impossible.";
+  if (action === "complete") return "Rappel termine monsieur.";
+  if (action === "snooze") return `Rappel reporte de ${result.minutes || proactiveStatus.snoozeMinutes || 10} minutes.`;
+  return "Notification marquee comme lue.";
+}
+
+function formatProactiveStatus() {
+  return [
+    `Mode proactif : ${proactiveStatus.backgroundActive ? "actif" : "inactif"}.`,
+    `Notifications Windows : ${proactiveStatus.notificationsEnabled ? "activees" : "desactivees"}.`,
+    `Fermeture vers le tray : ${proactiveStatus.closeToTray ? "active" : "desactivee"}.`,
+    `Lancement automatique : ${proactiveStatus.launchAtStartup ? "active" : "desactive"}.`,
+    `${notificationEntries.filter((item) => !item.readAt).length} notification(s) non lue(s).`
+  ].join("\n");
 }
 
 function getMemoryApi() {
@@ -2194,7 +2412,7 @@ async function memorySummary() {
 }
 
 async function runJarvisDiagnostic() {
-  await Promise.all([refreshLocalMemory(), refreshOrganization(), refreshAutomationSettings(), refreshAnalytics()]);
+  await Promise.all([refreshLocalMemory(), refreshOrganization(), refreshAutomationSettings(), refreshAnalytics(), refreshNotificationCenter()]);
   let ollamaStatus = "indisponible";
   const api = getAiApi();
   if (api && typeof api.getOllamaStatus === "function") {
@@ -2213,6 +2431,7 @@ async function runJarvisDiagnostic() {
     `Memoire locale : ${getMemoryApi() ? "active" : "indisponible"} (${memoryEntries.length} memoire(s), ${noteEntries.length} note(s)).`,
     `Taches : ${taskEntries.length}. Rappels : ${reminderEntries.length}.`,
     `Automatisations actives : ${hasActiveAutomation() ? "oui" : "non"}.`,
+    `Mode proactif : ${proactiveStatus.backgroundActive ? "actif" : "inactif"}, ${notificationEntries.filter((item) => !item.readAt).length} notification(s) non lue(s).`,
     `Derniere activite : ${analyticsSummary ? formatLastActivity(analyticsSummary.lastActivity) : "inconnue"}.`
   ].join("\n");
 }
@@ -2220,7 +2439,7 @@ async function runJarvisDiagnostic() {
 async function globalSearch(query) {
   const safeQuery = normalizeCommand(query);
   if (!safeQuery) return "Recherche vide. Precisez un terme, monsieur.";
-  await Promise.all([refreshLocalMemory(), refreshOrganization(), refreshPlanningData()]);
+  await Promise.all([refreshLocalMemory(), refreshOrganization(), refreshPlanningData(), refreshNotificationCenter()]);
   const matchText = (text) => normalizeCommand(text || "").includes(safeQuery);
   const groups = [
     ["Memoire", memoryEntries.filter((item) => matchText(item.content)).map((item) => item.content)],
@@ -2228,6 +2447,7 @@ async function globalSearch(query) {
     ["Taches", taskEntries.filter((item) => matchText(item.title)).map((item) => item.title)],
     ["Rappels", reminderEntries.filter((item) => matchText(item.title)).map((item) => item.title)],
     ["Planning", planningEntries.filter((item) => matchText(item.title)).map((item) => `${item.date} ${item.time || "--:--"} ${item.title}`)],
+    ["Notifications", notificationEntries.filter((item) => matchText(item.title) || matchText(item.message)).map((item) => item.message)],
     ["Historique", historyEntries.filter((item) => matchText(item.command) || matchText(item.response)).map((item) => item.command)]
   ];
   const lines = groups
@@ -2256,9 +2476,13 @@ async function confirmTotalReset() {
     await planningApi.clearDailyLogs();
     await planningApi.clearFocusSessions();
   }
+  const proactiveApi = getProactiveApi();
+  if (proactiveApi && typeof proactiveApi.clearNotifications === "function") {
+    await proactiveApi.clearNotifications();
+  }
   clearHistory();
   await resetAutomationSettingsLocal();
-  await Promise.all([refreshLocalMemory(), refreshOrganization(), refreshPlanningData(), refreshAnalytics()]);
+  await Promise.all([refreshLocalMemory(), refreshOrganization(), refreshPlanningData(), refreshAnalytics(), refreshNotificationCenter()]);
   return "Reset total confirme. Donnees locales videes.";
 }
 
@@ -3545,6 +3769,33 @@ async function handleCommand(command) {
   } else if (cleanCommand === "centre sauvegarde" || cleanCommand === "sauvegardes") {
     await refreshBackupStatus();
     message = navigateToSection("backup-panel", "Centre de sauvegarde affiche.");
+  } else if (cleanCommand === "centre notifications" || cleanCommand === "mes notifications") {
+    await refreshNotificationCenter();
+    message = navigateToSection("notification-panel", "Centre de notifications affiche, monsieur.");
+  } else if (cleanCommand === "statut proactif") {
+    await refreshNotificationCenter();
+    message = formatProactiveStatus();
+    respondDisplay(message, "Voici le statut du mode proactif.");
+    addHistory(cleanCommand, message);
+    input.value = "";
+    return;
+  } else if (cleanCommand === "active notifications") {
+    message = await setProactiveSetting("notificationsEnabled", true);
+  } else if (cleanCommand === "desactive notifications") {
+    message = await setProactiveSetting("notificationsEnabled", false);
+  } else if (cleanCommand === "lancement automatique" || cleanCommand === "active lancement automatique") {
+    message = await setProactiveSetting("launchAtStartup", true);
+  } else if (cleanCommand === "desactive lancement automatique") {
+    message = await setProactiveSetting("launchAtStartup", false);
+  } else if (cleanCommand === "mode arriere-plan" || cleanCommand === "active mode arriere-plan") {
+    message = await setProactiveSetting("closeToTray", true);
+  } else if (cleanCommand === "desactive mode arriere-plan") {
+    message = await setProactiveSetting("closeToTray", false);
+  } else if (cleanCommand === "marque notifications lues") {
+    const api = getProactiveApi();
+    if (api && typeof api.markAllNotificationsRead === "function") await api.markAllNotificationsRead();
+    await refreshNotificationCenter();
+    message = api ? "Toutes les notifications sont marquees comme lues." : getDesktopOnlyMessage();
   } else if (cleanCommand === "statut ia") {
     const api = getAiApi();
     message = api && typeof api.getOllamaStatus === "function"
@@ -4413,6 +4664,41 @@ safeBindElement(diagnoseStorageBtn, "click", async () => {
   respond(message, false);
   addHistory("diagnostic stockage", message);
 });
+safeBindElement(notificationList, "click", async (event) => {
+  const button = event.target.closest("[data-notification-action]");
+  if (!button) return;
+  const message = await runNotificationAction(
+    button.dataset.notificationAction,
+    button.dataset.reminderId || "",
+    button.dataset.notificationId || ""
+  );
+  respond(message, false);
+  addHistory(`notification ${button.dataset.notificationAction}`, message);
+});
+safeBindElement(toggleWindowsNotificationsBtn, "click", async () => {
+  const message = await setProactiveSetting("notificationsEnabled", !proactiveStatus.notificationsEnabled);
+  respond(message, false);
+});
+safeBindElement(toggleStartupBtn, "click", async () => {
+  const message = await setProactiveSetting("launchAtStartup", !proactiveStatus.launchAtStartup);
+  respond(message, false);
+});
+safeBindElement(toggleCloseToTrayBtn, "click", async () => {
+  const message = await setProactiveSetting("closeToTray", !proactiveStatus.closeToTray);
+  respond(message, false);
+});
+safeBindElement(markNotificationsReadBtn, "click", async () => {
+  const api = getProactiveApi();
+  if (api && typeof api.markAllNotificationsRead === "function") await api.markAllNotificationsRead();
+  await refreshNotificationCenter();
+  respond(api ? "Toutes les notifications sont marquees comme lues." : getDesktopOnlyMessage(), false);
+});
+safeBindElement(clearNotificationsBtn, "click", async () => {
+  const api = getProactiveApi();
+  if (api && typeof api.clearNotifications === "function") await api.clearNotifications();
+  await refreshNotificationCenter();
+  respond(api ? "Centre de notifications vide." : getDesktopOnlyMessage(), false);
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && bridgeOnboarding && !bridgeOnboarding.hidden) {
     closeBridgeOnboarding();
@@ -4501,6 +4787,7 @@ refreshAnalytics();
 refreshAutomationSettings();
 refreshBridgeOnboarding();
 refreshBackupStatus();
+refreshNotificationCenter();
 updateClock();
 updateMetrics();
 updateMobileMode();
@@ -4519,7 +4806,22 @@ window.setTimeout(runEveningAutomationIfNeeded, 2500);
 
 window.setInterval(updateClock, 1000);
 window.setInterval(updateMetrics, 3000);
-window.setInterval(checkDueReminders, 60000);
 window.setInterval(runEveningAutomationIfNeeded, 60000);
 window.setInterval(refreshBridgeOnboarding, 30000);
 if ("speechSynthesis" in window) window.speechSynthesis.onvoiceschanged = loadBrowserVoices;
+
+const proactiveApi = getProactiveApi();
+if (proactiveApi && typeof proactiveApi.onNotificationsChanged === "function") {
+  proactiveApi.onNotificationsChanged((status) => refreshNotificationCenter(status));
+}
+if (proactiveApi && typeof proactiveApi.onOrganizationChanged === "function") {
+  proactiveApi.onOrganizationChanged(() => refreshOrganization());
+}
+if (proactiveApi && typeof proactiveApi.onNavigateRequest === "function") {
+  proactiveApi.onNavigateRequest((request) => {
+    const target = request && request.target;
+    if (!target) return;
+    if (target === "notification-panel") refreshNotificationCenter();
+    navigateToSection(target, "Navigation Electron effectuee.");
+  });
+}

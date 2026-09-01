@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell, session } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, shell, session, Tray } = require("electron");
 const { spawn } = require("node:child_process");
 const os = require("node:os");
 const path = require("node:path");
@@ -6,8 +6,10 @@ const QRCode = require("qrcode");
 const { createBackupManager } = require("./backup-manager");
 const { createJarvisBridge } = require("./bridge-server");
 const { createMemoryStore } = require("./memory-store");
+const { createProactiveManager, DEFAULT_SNOOZE_MINUTES } = require("./proactive-manager");
 
 const APP_TITLE = "JARVIS Assistant";
+const APP_ID = "com.lrdaaxironman.jarvisassistant";
 const OLLAMA_URL = "http://localhost:11434/api/chat";
 const OLLAMA_STATUS_URL = "http://localhost:11434/api/tags";
 const OLLAMA_MODEL = "llama3.2:3b";
@@ -26,6 +28,7 @@ const OPENABLE_FOLDERS = {
 };
 const MEMORY_FILE_NAME = "jarvis-memory.json";
 const BACKUP_DIRECTORY_NAME = "backups";
+const PROACTIVE_CHECK_INTERVAL_MS = 15 * 1000;
 const VOICE_TRANSCRIBE_SCRIPT = path.join(__dirname, "voice", "transcribe.py");
 const VOICE_PYTHON_MISSING_MESSAGE = "Python est introuvable. Installez Python depuis python.org et cochez Add Python to PATH.";
 const VOICE_DEPENDENCIES_MISSING_MESSAGE = "Dependances vocales absentes. Lancez : python -m pip install sounddevice scipy faster-whisper";
@@ -44,7 +47,10 @@ const DEFAULT_PREFERENCES = {
   theme: "cyan",
   animations: true,
   compactMode: false,
-  reducedMotion: false
+  reducedMotion: false,
+  notificationsEnabled: true,
+  closeToTray: true,
+  launchAtStartup: false
 };
 const EMPTY_MEMORY_DATA = {
   memories: [],
@@ -54,14 +60,23 @@ const EMPTY_MEMORY_DATA = {
   dailyLogs: [],
   planning: [],
   focusSessions: [],
+  notifications: [],
   automations: DEFAULT_AUTOMATION_SETTINGS,
   preferences: DEFAULT_PREFERENCES
 };
 let jarvisBridge = null;
 let memoryStore = null;
 let backupManager = null;
+let proactiveManager = null;
+let mainWindow = null;
+let tray = null;
+let proactiveInterval = null;
+let isQuitting = false;
+let backgroundNoticeShown = false;
+let runtimePreferences = { ...DEFAULT_PREFERENCES };
 
 app.commandLine.appendSwitch("enable-features", "MediaStream");
+app.setAppUserModelId(APP_ID);
 
 function configurePermissions() {
   // Autorise uniquement les permissions media utiles au micro.
@@ -175,6 +190,17 @@ function getBackupManager() {
   return backupManager;
 }
 
+function getProactiveManager() {
+  if (!proactiveManager) {
+    proactiveManager = createProactiveManager({
+      store: getMemoryStore(),
+      retention: 100
+    });
+  }
+
+  return proactiveManager;
+}
+
 function normalizeMemoryData(data) {
   const memories = Array.isArray(data && data.memories) ? data.memories : [];
   const notes = Array.isArray(data && data.notes) ? data.notes : [];
@@ -183,6 +209,7 @@ function normalizeMemoryData(data) {
   const dailyLogs = Array.isArray(data && data.dailyLogs) ? data.dailyLogs : [];
   const planning = Array.isArray(data && data.planning) ? data.planning : [];
   const focusSessions = Array.isArray(data && data.focusSessions) ? data.focusSessions : [];
+  const notifications = Array.isArray(data && data.notifications) ? data.notifications : [];
 
   return {
     memories: memories
@@ -219,7 +246,9 @@ function normalizeMemoryData(data) {
         title: reminder.title,
         createdAt: typeof reminder.createdAt === "string" ? reminder.createdAt : new Date().toISOString(),
         remindAt: typeof reminder.remindAt === "string" ? reminder.remindAt : null,
-        done: Boolean(reminder.done)
+        done: Boolean(reminder.done),
+        notifiedAt: typeof reminder.notifiedAt === "string" ? reminder.notifiedAt : null,
+        completedAt: typeof reminder.completedAt === "string" ? reminder.completedAt : null
       })),
     dailyLogs: dailyLogs
       .filter((log) => log && (typeof log.summary === "string" || Array.isArray(log.wins) || Array.isArray(log.blockers)))
@@ -252,6 +281,20 @@ function normalizeMemoryData(data) {
         endedAt: typeof session.endedAt === "string" ? session.endedAt : null,
         status: normalizeFocusStatus(session.status)
       })),
+    notifications: notifications
+      .filter((notification) => notification && typeof notification.message === "string")
+      .map((notification) => ({
+        id: typeof notification.id === "string" ? notification.id : createLocalId("notification"),
+        type: notification.type === "reminder" ? "reminder" : "system",
+        title: typeof notification.title === "string" ? notification.title : "JARVIS",
+        message: notification.message,
+        entityId: typeof notification.entityId === "string" ? notification.entityId : null,
+        createdAt: typeof notification.createdAt === "string" ? notification.createdAt : new Date().toISOString(),
+        readAt: typeof notification.readAt === "string" ? notification.readAt : null,
+        actionedAt: typeof notification.actionedAt === "string" ? notification.actionedAt : null,
+        status: normalizeNotificationStatus(notification.status)
+      }))
+      .slice(0, 100),
     automations: normalizeAutomationSettings(data && data.automations),
     preferences: normalizePreferences(data && data.preferences)
   };
@@ -266,7 +309,7 @@ async function mutateMemoryData(mutator) {
 }
 
 function countLocalDataItems(data) {
-  return ["memories", "notes", "tasks", "reminders", "dailyLogs", "planning", "focusSessions"]
+  return ["memories", "notes", "tasks", "reminders", "dailyLogs", "planning", "focusSessions", "notifications"]
     .reduce((total, key) => total + (Array.isArray(data && data[key]) ? data[key].length : 0), 0);
 }
 
@@ -399,8 +442,15 @@ function normalizePreferences(preferences) {
     theme: ["cyan", "blue", "green", "violet"].includes(theme) ? theme : "cyan",
     animations: typeof source.animations === "boolean" ? source.animations : true,
     compactMode: Boolean(source.compactMode),
-    reducedMotion: Boolean(source.reducedMotion)
+    reducedMotion: Boolean(source.reducedMotion),
+    notificationsEnabled: typeof source.notificationsEnabled === "boolean" ? source.notificationsEnabled : true,
+    closeToTray: typeof source.closeToTray === "boolean" ? source.closeToTray : true,
+    launchAtStartup: Boolean(source.launchAtStartup)
   };
+}
+
+function normalizeNotificationStatus(status) {
+  return ["active", "read", "completed", "snoozed"].includes(status) ? status : "active";
 }
 
 function normalizeTaskPriority(priority) {
@@ -627,7 +677,9 @@ async function addReminder(title, remindAt) {
       title: safeTitle,
       createdAt: new Date().toISOString(),
       remindAt: typeof remindAt === "string" && remindAt ? remindAt : null,
-      done: false
+      done: false,
+      notifiedAt: null,
+      completedAt: null
     };
 
     data.reminders.unshift(reminder);
@@ -660,21 +712,11 @@ async function getDueReminders() {
   const data = await readMemoryData();
   const now = Date.now();
   const dueReminders = data.reminders.filter((reminder) => {
-    if (reminder.done || !reminder.remindAt) return false;
+    if (reminder.done || reminder.notifiedAt || !reminder.remindAt) return false;
     const dueAt = new Date(reminder.remindAt).getTime();
     return Number.isFinite(dueAt) && dueAt <= now;
   });
-
-  if (!dueReminders.length) return { ok: true, reminders: [] };
-
-  const dueIds = new Set(dueReminders.map((reminder) => reminder.id));
-  return mutateMemoryData((latestData) => {
-    const latestDueReminders = latestData.reminders.filter((reminder) => dueIds.has(reminder.id) && !reminder.done);
-    latestDueReminders.forEach((reminder) => {
-      reminder.done = true;
-    });
-    return { ok: true, reminders: latestDueReminders };
-  });
+  return { ok: true, reminders: dueReminders };
 }
 
 async function addPlanningItem(item = {}) {
@@ -996,7 +1038,12 @@ async function updatePreference(key, value) {
 
 async function resetPreferences() {
   return mutateMemoryData((data) => {
-    data.preferences = { ...DEFAULT_PREFERENCES };
+    data.preferences = {
+      ...DEFAULT_PREFERENCES,
+      notificationsEnabled: data.preferences.notificationsEnabled,
+      closeToTray: data.preferences.closeToTray,
+      launchAtStartup: data.preferences.launchAtStartup
+    };
     return { ok: true, preferences: data.preferences };
   });
 }
@@ -1305,6 +1352,223 @@ function getAppInfo() {
   };
 }
 
+function sendToRenderer(channel, payload) {
+  if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+  mainWindow.webContents.send(channel, payload);
+}
+
+function showMainWindow(target = "") {
+  if (!mainWindow || mainWindow.isDestroyed()) createMainWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const reveal = () => {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    if (target) sendToRenderer("jarvis:navigate", { target });
+  };
+
+  if (mainWindow.webContents.isLoading()) {
+    mainWindow.webContents.once("did-finish-load", reveal);
+  } else {
+    reveal();
+  }
+}
+
+function applyLoginItemSetting(enabled) {
+  if (process.platform !== "win32" || !app.isPackaged) return;
+  app.setLoginItemSettings({
+    openAtLogin: Boolean(enabled),
+    path: process.execPath,
+    args: ["--hidden"]
+  });
+}
+
+async function getProactiveStatus() {
+  const data = await readMemoryData();
+  const preferences = data.preferences;
+  let loginItemActive = false;
+  if (process.platform === "win32" && app.isPackaged) {
+    loginItemActive = Boolean(app.getLoginItemSettings({ path: process.execPath, args: ["--hidden"] }).openAtLogin);
+  }
+
+  return {
+    ok: true,
+    backgroundActive: Boolean(proactiveInterval),
+    closeToTray: preferences.closeToTray,
+    notificationsEnabled: preferences.notificationsEnabled,
+    notificationsSupported: Notification.isSupported(),
+    launchAtStartup: preferences.launchAtStartup,
+    launchAtStartupActive: loginItemActive,
+    packaged: app.isPackaged,
+    snoozeMinutes: DEFAULT_SNOOZE_MINUTES
+  };
+}
+
+async function refreshTrayMenu() {
+  if (!tray || tray.isDestroyed()) return;
+  const notificationStatus = await getProactiveManager().listNotifications();
+  const unread = notificationStatus.unread || 0;
+  tray.setToolTip(unread ? `${APP_TITLE} - ${unread} notification(s)` : APP_TITLE);
+  tray.setContextMenu(Menu.buildFromTemplate([
+    {
+      label: "Ouvrir JARVIS",
+      click: () => showMainWindow()
+    },
+    {
+      label: unread ? `Centre de notifications (${unread})` : "Centre de notifications",
+      click: () => showMainWindow("notification-panel")
+    },
+    { type: "separator" },
+    {
+      label: "Notifications Windows",
+      type: "checkbox",
+      checked: runtimePreferences.notificationsEnabled,
+      click: (menuItem) => updateProactiveSetting("notificationsEnabled", menuItem.checked)
+    },
+    {
+      label: "Lancer avec Windows",
+      type: "checkbox",
+      checked: runtimePreferences.launchAtStartup,
+      click: (menuItem) => updateProactiveSetting("launchAtStartup", menuItem.checked)
+    },
+    {
+      label: "Fermer vers le tray",
+      type: "checkbox",
+      checked: runtimePreferences.closeToTray,
+      click: (menuItem) => updateProactiveSetting("closeToTray", menuItem.checked)
+    },
+    { type: "separator" },
+    {
+      label: "Quitter JARVIS",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]));
+}
+
+async function broadcastNotificationChange() {
+  const status = await getProactiveManager().listNotifications();
+  sendToRenderer("jarvis:notifications-changed", status);
+  await refreshTrayMenu();
+  return status;
+}
+
+async function applyRuntimePreferences(preferences) {
+  runtimePreferences = { ...DEFAULT_PREFERENCES, ...preferences };
+  applyLoginItemSetting(runtimePreferences.launchAtStartup);
+  await refreshTrayMenu();
+}
+
+async function updateProactiveSetting(key, value) {
+  if (!["notificationsEnabled", "closeToTray", "launchAtStartup"].includes(key)) {
+    return { ok: false, message: "Reglage proactif inconnu." };
+  }
+  const result = await updatePreference(key, Boolean(value));
+  if (result.ok) await applyRuntimePreferences(result.preferences);
+  return { ...result, status: result.ok ? await getProactiveStatus() : null };
+}
+
+async function handleReminderNotificationAction(reminderId, action, notificationId = "") {
+  let result;
+  if (action === "complete") {
+    result = await getProactiveManager().completeReminder(reminderId);
+  } else if (action === "snooze") {
+    result = await getProactiveManager().snoozeReminder(reminderId, DEFAULT_SNOOZE_MINUTES);
+  } else {
+    result = { ok: false, message: "Action de rappel inconnue." };
+  }
+  if (notificationId) await getProactiveManager().markRead(notificationId).catch(() => null);
+  await broadcastNotificationChange();
+  sendToRenderer("jarvis:organization-changed", { reminderId, action, result });
+  return result;
+}
+
+function showNativeReminder(reminder, notificationEntry) {
+  if (!runtimePreferences.notificationsEnabled || !Notification.isSupported()) return;
+  const nativeNotification = new Notification({
+    id: notificationEntry.id,
+    groupId: "jarvis-reminders",
+    groupTitle: "JARVIS Assistant",
+    title: "JARVIS - Rappel",
+    body: reminder.title,
+    icon: path.join(__dirname, "assets", "icons", "icon-192.png"),
+    timeoutType: "never",
+    urgency: "normal",
+    actions: [
+      { type: "button", text: "Terminer" },
+      { type: "button", text: `Reporter ${DEFAULT_SNOOZE_MINUTES} min` }
+    ]
+  });
+
+  nativeNotification.on("click", async () => {
+    await getProactiveManager().markRead(notificationEntry.id).catch(() => null);
+    await broadcastNotificationChange();
+    showMainWindow("notification-panel");
+  });
+  nativeNotification.on("action", async (details, legacyActionIndex) => {
+    const actionIndex = Number.isInteger(details && details.actionIndex)
+      ? details.actionIndex
+      : legacyActionIndex;
+    await handleReminderNotificationAction(
+      reminder.id,
+      actionIndex === 0 ? "complete" : "snooze",
+      notificationEntry.id
+    );
+  });
+  nativeNotification.on("failed", (_event, error) => {
+    console.error("[JARVIS notifications] Notification Windows impossible:", error);
+  });
+  nativeNotification.show();
+}
+
+async function processDueReminders() {
+  try {
+    const data = await readMemoryData();
+    if (!data.automations.automaticReminders) return { ok: true, reminders: [] };
+    runtimePreferences = { ...DEFAULT_PREFERENCES, ...data.preferences };
+    const result = await getProactiveManager().claimDueReminders();
+    result.reminders.forEach((reminder, index) => {
+      showNativeReminder(reminder, result.notifications[index]);
+    });
+    if (result.reminders.length) await broadcastNotificationChange();
+    return result;
+  } catch (error) {
+    console.error("[JARVIS notifications] Verification des rappels impossible:", error);
+    return { ok: false, reminders: [], message: error.message };
+  }
+}
+
+function startProactiveScheduler() {
+  if (proactiveInterval) clearInterval(proactiveInterval);
+  proactiveInterval = setInterval(processDueReminders, PROACTIVE_CHECK_INTERVAL_MS);
+  setTimeout(processDueReminders, 1500);
+}
+
+function createTray() {
+  if (tray && !tray.isDestroyed()) return tray;
+  const icon = nativeImage.createFromPath(path.join(__dirname, "assets", "icons", "icon-192.png"));
+  tray = new Tray(icon.resize({ width: 20, height: 20 }));
+  tray.on("click", () => showMainWindow());
+  refreshTrayMenu().catch((error) => console.error("[JARVIS tray] Menu indisponible:", error));
+  return tray;
+}
+
+function showBackgroundModeNotice() {
+  if (backgroundNoticeShown || !runtimePreferences.notificationsEnabled || !Notification.isSupported()) return;
+  backgroundNoticeShown = true;
+  const notification = new Notification({
+    title: "JARVIS reste actif",
+    body: "Les rappels continuent en arriere-plan. Utilisez l'icone JARVIS pour rouvrir l'application.",
+    icon: path.join(__dirname, "assets", "icons", "icon-192.png"),
+    silent: true
+  });
+  notification.on("click", () => showMainWindow());
+  notification.show();
+}
+
 function registerAiIpcHandlers() {
   ipcMain.handle("ask-ollama", (_event, message) => askJarvisOllama(message));
   ipcMain.handle("jarvis:get-ollama-config", () => getOllamaConfig());
@@ -1352,8 +1616,40 @@ function registerAiIpcHandlers() {
   ipcMain.handle("automation:updateSetting", (_event, key, value) => updateAutomationSetting(key, value));
   ipcMain.handle("automation:resetSettings", () => resetAutomationSettings());
   ipcMain.handle("preferences:get", () => getPreferences());
-  ipcMain.handle("preferences:update", (_event, key, value) => updatePreference(key, value));
-  ipcMain.handle("preferences:reset", () => resetPreferences());
+  ipcMain.handle("preferences:update", async (_event, key, value) => {
+    const result = await updatePreference(key, value);
+    if (result.ok) await applyRuntimePreferences(result.preferences);
+    return result;
+  });
+  ipcMain.handle("preferences:reset", async () => {
+    const result = await resetPreferences();
+    if (result.ok) await applyRuntimePreferences(result.preferences);
+    return result;
+  });
+  ipcMain.handle("notification:list", (_event, limit) => getProactiveManager().listNotifications(limit));
+  ipcMain.handle("notification:mark-read", async (_event, id) => {
+    const result = await getProactiveManager().markRead(id);
+    await broadcastNotificationChange();
+    return result;
+  });
+  ipcMain.handle("notification:mark-all-read", async () => {
+    const result = await getProactiveManager().markAllRead();
+    await broadcastNotificationChange();
+    return result;
+  });
+  ipcMain.handle("notification:clear", async () => {
+    const result = await getProactiveManager().clearNotifications();
+    await broadcastNotificationChange();
+    return result;
+  });
+  ipcMain.handle("notification:complete-reminder", (_event, reminderId, notificationId) => (
+    handleReminderNotificationAction(reminderId, "complete", notificationId)
+  ));
+  ipcMain.handle("notification:snooze-reminder", (_event, reminderId, notificationId) => (
+    handleReminderNotificationAction(reminderId, "snooze", notificationId)
+  ));
+  ipcMain.handle("proactive:get-status", () => getProactiveStatus());
+  ipcMain.handle("proactive:update-setting", (_event, key, value) => updateProactiveSetting(key, value));
   ipcMain.handle("backup:get-status", () => getBackupStatus());
   ipcMain.handle("backup:create", (_event, label) => createJarvisBackup(label));
   ipcMain.handle("backup:export", (event) => exportJarvisBackup(event));
@@ -1432,18 +1728,26 @@ function registerDesktopIpcHandlers() {
     return { ok: true };
   });
 
-  ipcMain.handle("jarvis:close-app", (event) => {
+  ipcMain.handle("jarvis:hide-to-tray", (event) => {
     const window = getWindowFromEvent(event);
     if (!window) return { ok: false, message: "Fenetre introuvable." };
+    window.hide();
+    showBackgroundModeNotice();
+    return { ok: true };
+  });
 
-    window.close();
+  ipcMain.handle("jarvis:close-app", () => {
+    isQuitting = true;
+    app.quit();
     return { ok: true };
   });
 }
 
 function createMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
+  const startHidden = process.argv.includes("--hidden");
   // Fenetre desktop securisee : pas de Node.js direct dans l'interface.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 960,
@@ -1452,6 +1756,7 @@ function createMainWindow() {
     icon: path.join(__dirname, "assets", "icons", "icon-512.png"),
     backgroundColor: "#020817",
     autoHideMenuBar: true,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -1462,6 +1767,20 @@ function createMainWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, "index.html"));
+  mainWindow.once("ready-to-show", () => {
+    if (!startHidden) mainWindow.show();
+  });
+
+  mainWindow.on("close", (event) => {
+    if (isQuitting || !runtimePreferences.closeToTray) return;
+    event.preventDefault();
+    mainWindow.hide();
+    showBackgroundModeNotice();
+  });
+
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isSafeExternalUrl(url)) {
@@ -1484,31 +1803,47 @@ function createMainWindow() {
       shell.openExternal(url);
     }
   });
+
+  return mainWindow;
 }
 
-app.whenReady().then(async () => {
-  configurePermissions();
-  registerAiIpcHandlers();
-  registerDesktopIpcHandlers();
-  await ensureDailyBackup().catch((error) => console.error("[JARVIS backup] Sauvegarde quotidienne impossible:", error));
-  await startJarvisBridge();
-  createMainWindow();
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
-    }
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => showMainWindow());
+
+  app.whenReady().then(async () => {
+    configurePermissions();
+    registerAiIpcHandlers();
+    registerDesktopIpcHandlers();
+    const preferenceResult = await getPreferences();
+    await applyRuntimePreferences(preferenceResult.preferences);
+    createTray();
+    await ensureDailyBackup().catch((error) => console.error("[JARVIS backup] Sauvegarde quotidienne impossible:", error));
+    await startJarvisBridge();
+    createMainWindow();
+    startProactiveScheduler();
+
+    app.on("activate", () => showMainWindow());
   });
-});
+}
 
 app.on("before-quit", () => {
+  isQuitting = true;
+  if (proactiveInterval) {
+    clearInterval(proactiveInterval);
+    proactiveInterval = null;
+  }
   if (jarvisBridge) {
     jarvisBridge.stop().catch((error) => console.error("[JARVIS Bridge] Arret incomplet:", error));
   }
+  if (tray && !tray.isDestroyed()) tray.destroy();
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
+  if (process.platform !== "darwin" && (isQuitting || !runtimePreferences.closeToTray)) {
     app.quit();
   }
 });

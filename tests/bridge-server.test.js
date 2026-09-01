@@ -24,7 +24,7 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     rootDir,
     host: "127.0.0.1",
     port: 0,
-    version: "4.4.0-test",
+    version: "4.5.0-test",
     model: "test-model",
     readData: async () => data,
     getOllamaStatus: async () => ({ ok: true, model: "test-model" }),

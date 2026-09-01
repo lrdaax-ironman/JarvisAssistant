@@ -2,6 +2,13 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 const allowedFolders = ["documents", "desktop"];
 
+function subscribeToMain(channel, callback) {
+  if (typeof callback !== "function") return () => {};
+  const listener = (_event, payload) => callback(payload);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}
+
 // Pont minimal entre Electron et l'interface, sans exposer Node.js.
 contextBridge.exposeInMainWorld("jarvisDesktop", {
   isDesktop: true,
@@ -34,6 +41,7 @@ contextBridge.exposeInMainWorld("jarvisDesktop", {
   getSystemInfo: () => ipcRenderer.invoke("jarvis:get-system-info"),
   setFullScreen: (enabled) => ipcRenderer.invoke("jarvis:set-fullscreen", Boolean(enabled)),
   minimize: () => ipcRenderer.invoke("jarvis:minimize"),
+  hideToTray: () => ipcRenderer.invoke("jarvis:hide-to-tray"),
   closeApp: () => ipcRenderer.invoke("jarvis:close-app")
 });
 
@@ -110,6 +118,25 @@ contextBridge.exposeInMainWorld("jarvisAPI", {
   getPreferences: () => ipcRenderer.invoke("preferences:get"),
   updatePreference: (key, value) => ipcRenderer.invoke("preferences:update", String(key || ""), value),
   resetPreferences: () => ipcRenderer.invoke("preferences:reset"),
+  listNotifications: (limit = 100) => ipcRenderer.invoke("notification:list", Number(limit) || 100),
+  markNotificationRead: (id) => ipcRenderer.invoke("notification:mark-read", String(id || "")),
+  markAllNotificationsRead: () => ipcRenderer.invoke("notification:mark-all-read"),
+  clearNotifications: () => ipcRenderer.invoke("notification:clear"),
+  completeReminderFromNotification: (reminderId, notificationId) => ipcRenderer.invoke(
+    "notification:complete-reminder",
+    String(reminderId || ""),
+    String(notificationId || "")
+  ),
+  snoozeReminderFromNotification: (reminderId, notificationId) => ipcRenderer.invoke(
+    "notification:snooze-reminder",
+    String(reminderId || ""),
+    String(notificationId || "")
+  ),
+  getProactiveStatus: () => ipcRenderer.invoke("proactive:get-status"),
+  updateProactiveSetting: (key, value) => ipcRenderer.invoke("proactive:update-setting", String(key || ""), Boolean(value)),
+  onNotificationsChanged: (callback) => subscribeToMain("jarvis:notifications-changed", callback),
+  onOrganizationChanged: (callback) => subscribeToMain("jarvis:organization-changed", callback),
+  onNavigateRequest: (callback) => subscribeToMain("jarvis:navigate", callback),
   getBackupStatus: () => ipcRenderer.invoke("backup:get-status"),
   createBackup: (label = "manual") => ipcRenderer.invoke("backup:create", String(label || "manual")),
   exportBackup: () => ipcRenderer.invoke("backup:export"),
