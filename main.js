@@ -6,7 +6,9 @@ const QRCode = require("qrcode");
 const { createBackupManager } = require("./backup-manager");
 const { createJarvisBridge } = require("./bridge-server");
 const { createMemoryStore } = require("./memory-store");
+const { mergeMobileItem } = require("./mobile-import");
 const { createProactiveManager, DEFAULT_SNOOZE_MINUTES } = require("./proactive-manager");
+const { createSystemMetricsSampler } = require("./system-metrics");
 
 const APP_TITLE = "JARVIS Assistant";
 const APP_ID = "com.lrdaaxironman.jarvisassistant";
@@ -61,6 +63,7 @@ const EMPTY_MEMORY_DATA = {
   planning: [],
   focusSessions: [],
   notifications: [],
+  mobileImports: [],
   automations: DEFAULT_AUTOMATION_SETTINGS,
   preferences: DEFAULT_PREFERENCES
 };
@@ -74,6 +77,7 @@ let proactiveInterval = null;
 let isQuitting = false;
 let backgroundNoticeShown = false;
 let runtimePreferences = { ...DEFAULT_PREFERENCES };
+const sampleSystemMetrics = createSystemMetricsSampler();
 
 app.commandLine.appendSwitch("enable-features", "MediaStream");
 app.setAppUserModelId(APP_ID);
@@ -210,6 +214,7 @@ function normalizeMemoryData(data) {
   const planning = Array.isArray(data && data.planning) ? data.planning : [];
   const focusSessions = Array.isArray(data && data.focusSessions) ? data.focusSessions : [];
   const notifications = Array.isArray(data && data.notifications) ? data.notifications : [];
+  const mobileImports = Array.isArray(data && data.mobileImports) ? data.mobileImports : [];
 
   return {
     memories: memories
@@ -295,6 +300,7 @@ function normalizeMemoryData(data) {
         status: normalizeNotificationStatus(notification.status)
       }))
       .slice(0, 100),
+    mobileImports: [...new Set(mobileImports.filter((id) => typeof id === "string" && /^[a-zA-Z0-9:_-]{1,200}$/.test(id)))],
     automations: normalizeAutomationSettings(data && data.automations),
     preferences: normalizePreferences(data && data.preferences)
   };
@@ -1681,7 +1687,10 @@ async function startJarvisBridge() {
     addTask,
     completeTask,
     addReminder,
-    addPlanningItem
+    addPlanningItem,
+    importMobileItem: (payload) => mutateMemoryData((data) => mergeMobileItem(data, payload, {
+      createId: createLocalId
+    }))
   });
 
   try {
@@ -1711,6 +1720,7 @@ function registerDesktopIpcHandlers() {
 
   ipcMain.handle("jarvis:open-folder", (_event, folderKey) => openSystemFolder(folderKey));
   ipcMain.handle("jarvis:get-system-info", () => getSimpleSystemInfo());
+  ipcMain.handle("jarvis:get-system-metrics", () => sampleSystemMetrics());
 
   ipcMain.handle("jarvis:set-fullscreen", (event, enabled) => {
     const window = getWindowFromEvent(event);

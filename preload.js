@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld("jarvisDesktop", {
     return ipcRenderer.invoke("jarvis:open-folder", folderKey);
   },
   getSystemInfo: () => ipcRenderer.invoke("jarvis:get-system-info"),
+  getSystemMetrics: () => ipcRenderer.invoke("jarvis:get-system-metrics"),
   setFullScreen: (enabled) => ipcRenderer.invoke("jarvis:set-fullscreen", Boolean(enabled)),
   minimize: () => ipcRenderer.invoke("jarvis:minimize"),
   hideToTray: () => ipcRenderer.invoke("jarvis:hide-to-tray"),

@@ -2,6 +2,28 @@
 
 Application desktop Electron locale avec interface JARVIS, Ollama, memoire, organisation, automatisations et synthese vocale.
 
+## Dossier source unique
+
+Le depot Git est la source de reference. Executer les commandes ci-dessous dans le dossier qui contient ce `README.md`, `package.json` et `.git` (sur cette machine : `JarvisAssistant-github-sync`). L'ancien dossier `JarvisAssistant-v3-work` n'est plus utilise pour lancer ni construire les nouvelles versions. Il peut rester en place pour ses anciens installateurs ; aucune donnee utilisateur n'est deplacee.
+
+```powershell
+npm.cmd ci
+npm.cmd test
+npm.cmd start
+npm.cmd run build
+```
+
+Le nouvel installateur est cree dans `dist/` de ce meme depot. `node_modules/` et `dist/` ne sont pas suivis par Git.
+
+## Fiabilite V4.6
+
+- Les jauges CPU et memoire utilisent des mesures locales Electron. La premiere mesure CPU affiche `--` jusqu'au second echantillon.
+- Le statut LAN indique seulement si une interface reseau locale est disponible ; ce n'est pas un test de connexion Internet.
+- Le mode analyse affiche ces mesures reelles et ne pretend plus realiser un diagnostic Windows complet.
+- Les parcours mobile autonome, Bridge, import et commandes desktop bloquees sont couverts par des tests automatises.
+- Les donnees mobiles restent distinctes de celles du PC. Depuis la page Bridge, `Actualiser PC` recharge seulement les donnees desktop. `Importer vers le PC` copie volontairement les donnees du navigateur ; relancer l'import ne cree pas de doublons et ne supprime pas les originaux.
+- La PWA Vercel et la page Bridge ont des stockages navigateur differents. Depuis Vercel, utiliser `Exporter mes donnees`, puis ouvrir la page Bridge sur le telephone, `Charger un export` et confirmer `Importer vers le PC`. Le fichier JSON contient les donnees mobiles et doit rester prive.
+
 ## Version PWA mobile
 
 JARVIS dispose d'une version mobile dediee avec deux fonctionnements : autonome sur le web, ou reliee au desktop par le Bridge local.
@@ -57,7 +79,7 @@ Notes :
 - La version mobile utilise `localStorage` pour les notes, taches, rappels, planning, memoire et preferences simples.
 - `mobile.js` ne depend pas de `window.jarvisAPI` et reste stable dans un navigateur mobile.
 - Le service worker est enregistre uniquement en contexte web `http` ou `https`, pas en `file://` Electron.
-- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v5` utilise une strategie network-first pour les fichiers d'interface.
+- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v6` utilise une strategie network-first pour les fichiers d'interface.
 
 ## Consolidation V4.3
 

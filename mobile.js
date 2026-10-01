@@ -1,7 +1,9 @@
 (() => {
-  const APP_VERSION = "4.5.0 mobile";
+  const APP_VERSION = "4.6.0 mobile";
   const STORAGE_PREFIX = "jarvis-mobile:";
   const BRIDGE_TOKEN_KEY = `${STORAGE_PREFIX}bridge-token`;
+  const DEVICE_ID_KEY = `${STORAGE_PREFIX}device-id`;
+  const TRANSFER_TYPES = ["tasks", "notes", "reminders", "planning", "memories"];
   const DESKTOP_ONLY_COMMANDS = new Set([
     "ouvrir documents", "ouvre documents", "ouvrir bureau", "ouvre bureau",
     "ouvrir calculatrice", "ouvre calculatrice", "ouvrir navigateur", "ouvre navigateur",
@@ -35,6 +37,13 @@
   const ollamaMobileState = $("ollama-mobile-state");
   const aiMobileState = $("ai-mobile-state");
   const storageState = $("storage-state");
+  const localTransferPanel = $("local-transfer-panel");
+  const localTransferCount = $("local-transfer-count");
+  const localTransferDetail = $("local-transfer-detail");
+  const localTransferButton = $("local-transfer-button");
+  const localExportButton = $("local-export-button");
+  const localLoadButton = $("local-load-button");
+  const localLoadInput = $("local-load-input");
 
   let deferredInstallPrompt = null;
   let bridgeAvailable = false;
@@ -42,6 +51,7 @@
   let bridgeData = null;
   let bridgeSummary = null;
   let bridgeToken = "";
+  let loadedTransfer = null;
 
   function normalize(value) {
     if (window.JarvisMobileCommands) {
@@ -120,14 +130,93 @@
   }
 
   function getLocalItems(type) {
-    return readJson(STORE[type], []);
+    const items = readJson(STORE[type], []);
+    return Array.isArray(items) ? items : [];
   }
 
   function getItems(type) {
-    if (bridgeAuthenticated && bridgeData && Array.isArray(bridgeData[type])) {
-      return bridgeData[type];
-    }
+    if (bridgeAuthenticated) return bridgeData && Array.isArray(bridgeData[type]) ? bridgeData[type] : [];
     return getLocalItems(type);
+  }
+
+  function getLocalTransferItems() {
+    return TRANSFER_TYPES.flatMap((type) => getLocalItems(type).map((item) => ({ type, item })));
+  }
+
+  function getSelectedTransfer() {
+    return loadedTransfer || { deviceId: null, items: getLocalTransferItems() };
+  }
+
+  function getDeviceId() {
+    try {
+      const existing = localStorage.getItem(DEVICE_ID_KEY);
+      if (existing && /^[a-zA-Z0-9_-]{1,80}$/.test(existing)) return existing;
+      const generated = window.crypto && typeof window.crypto.randomUUID === "function"
+        ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      localStorage.setItem(DEVICE_ID_KEY, generated);
+      return generated;
+    } catch (_error) {
+      throw new Error("Le stockage mobile est requis pour importer sans doublons.");
+    }
+  }
+
+  function updateLocalTransferUi() {
+    if (!localTransferPanel) return;
+    const localCount = getLocalTransferItems().length;
+    const count = getSelectedTransfer().items.length;
+    localTransferPanel.hidden = !bridgeAuthenticated && localCount === 0;
+    if (localTransferCount) localTransferCount.textContent = `${count} element${count > 1 ? "s" : ""}`;
+    if (localTransferDetail) {
+      localTransferDetail.textContent = loadedTransfer
+        ? " dans l'export charge. Cet import reste volontaire."
+        : " dans ce navigateur. La connexion au PC ne les transfere pas automatiquement.";
+    }
+    if (localExportButton) localExportButton.hidden = localCount === 0;
+    if (localLoadButton) localLoadButton.hidden = !bridgeAuthenticated;
+    if (localTransferButton) localTransferButton.hidden = !bridgeAuthenticated || count === 0;
+  }
+
+  function exportLocalData() {
+    const items = getLocalTransferItems();
+    if (!items.length) return setResponse("Aucune donnee", "Rien a exporter depuis ce navigateur.");
+    try {
+      const payload = { format: "jarvis-mobile-v1", deviceId: getDeviceId(), items };
+      const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `jarvis-mobile-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setResponse("Export pret", `${items.length} element(s) mobiles dans le fichier JSON. Chargez-le sur la page Bridge du PC pour les copier.`);
+    } catch (error) {
+      setResponse("Export impossible", error.message || "Le navigateur ne permet pas cet export.");
+    }
+  }
+
+  async function loadLocalExport(event) {
+    const file = event && event.target && event.target.files && event.target.files[0];
+    if (!file) return;
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error("Fichier trop volumineux (maximum 10 Mo).");
+      const payload = JSON.parse(await file.text());
+      if (payload.format !== "jarvis-mobile-v1" || !/^[a-zA-Z0-9_-]{1,80}$/.test(payload.deviceId)) {
+        throw new Error("Ce fichier n'est pas un export JARVIS mobile valide.");
+      }
+      if (!Array.isArray(payload.items) || payload.items.length > 5000 || payload.items.some((entry) => (
+        !entry || !TRANSFER_TYPES.includes(entry.type) || !entry.item || typeof entry.item.id !== "string"
+      ))) throw new Error("Liste d'elements mobiles invalide ou trop longue.");
+      loadedTransfer = { deviceId: payload.deviceId, items: payload.items };
+      updateLocalTransferUi();
+      setResponse("Export charge", `${payload.items.length} element(s) prets. Appuyez sur Importer vers le PC pour confirmer la copie.`);
+    } catch (error) {
+      loadedTransfer = null;
+      updateLocalTransferUi();
+      setResponse("Export refuse", error.message || "Fichier illisible.");
+    } finally {
+      if (localLoadInput) localLoadInput.value = "";
+    }
   }
 
   function saveLocalItems(type, items) {
@@ -193,6 +282,7 @@
 
   function updateBridgeUi() {
     if (!bridgeState || !bridgeDetail) return;
+    updateLocalTransferUi();
 
     if (!bridgeAvailable) {
       bridgeState.textContent = "Hors ligne";
@@ -234,7 +324,7 @@
 
     bridgeState.textContent = "Connecte";
     bridgeState.dataset.tone = "connected";
-    bridgeDetail.textContent = "Connexion locale authentifiee par jeton. Les echanges restent sur votre reseau Wi-Fi.";
+    bridgeDetail.textContent = "Donnees du PC affichees. Les donnees de ce telephone restent separees jusqu'a un import volontaire.";
     if (bridgeCodeLabel) bridgeCodeLabel.hidden = true;
     if (bridgeCodeInput) bridgeCodeInput.hidden = true;
     if (bridgePairButton) bridgePairButton.hidden = true;
@@ -369,6 +459,49 @@
     } catch (error) {
       setResponse("Synchronisation impossible", error.message || "Le PC ne repond plus.");
       return false;
+    }
+  }
+
+  async function importLocalData() {
+    if (!bridgeAuthenticated) {
+      setResponse("Bridge non connecte", "Associez d'abord ce telephone avec JARVIS desktop.");
+      return false;
+    }
+    const transfer = getSelectedTransfer();
+    const items = transfer.items;
+    if (!items.length) {
+      setResponse("Aucune donnee mobile", "Rien a importer depuis ce telephone.");
+      return true;
+    }
+
+    if (localTransferButton) localTransferButton.disabled = true;
+    let imported = 0;
+    let duplicates = 0;
+    try {
+      const deviceId = transfer.deviceId || getDeviceId();
+      for (const { type, item } of items) {
+        if (!item || typeof item.id !== "string" || !/^[a-zA-Z0-9_-]{1,70}$/.test(item.id)) {
+          throw new Error("Un element mobile n'a pas d'identifiant valide. Aucune suppression n'a eu lieu.");
+        }
+        setStatus(`Import ${imported + duplicates + 1}/${items.length}`);
+        const result = await bridgeRequest("/bridge/import-item", {
+          method: "POST",
+          body: { type, item, sourceId: `${deviceId}:${type}:${item.id}` }
+        });
+        if (result.imported) imported += 1;
+        else duplicates += 1;
+      }
+      await syncBridgeData(false);
+      setResponse("Import termine", `${imported} element(s) copies vers le PC, ${duplicates} deja presents. Les originaux restent sur ce telephone.`);
+      loadedTransfer = null;
+      return true;
+    } catch (error) {
+      await syncBridgeData(false);
+      setResponse("Import interrompu", `${imported} element(s) copies. ${error.message || "Connexion interrompue."} Relancez l'import pour reprendre sans doublons.`);
+      return false;
+    } finally {
+      if (localTransferButton) localTransferButton.disabled = false;
+      updateLocalTransferUi();
     }
   }
 
@@ -532,12 +665,13 @@
   }
 
   function showHelp() {
-    setResponse("Aide mobile", "JARVIS fonctionne seul ou connecte au desktop avec le Bridge V4.5.", [
+    setResponse("Aide mobile", "JARVIS fonctionne seul ou connecte au desktop avec le Bridge V4.6.", [
       "bridge statut",
       "ajoute tache finir Jarvis",
       "termine tache Jarvis",
       "note idee de contenu",
       "rappelle-moi verifier le build",
+      "importe donnees mobiles (avec le Bridge)",
       "Posez une question naturelle a Ollama une fois le Bridge connecte"
     ]);
   }
@@ -548,7 +682,7 @@
       return;
     }
     if (!bridgeAuthenticated) {
-      setResponse("Association requise", "Saisissez le code affiche sur le PC pour activer la synchronisation et Ollama.");
+      setResponse("Association requise", "Saisissez le code affiche sur le PC pour acceder aux donnees desktop et a Ollama.");
       return;
     }
     const counts = bridgeSummary && bridgeSummary.counts ? bridgeSummary.counts : {};
@@ -612,6 +746,8 @@
       showBridgeStatus();
     } else if (clean === "synchronise" || clean === "synchroniser") {
       await syncBridgeData(true);
+    } else if (clean === "importe donnees mobiles" || clean === "importer donnees mobiles") {
+      await importLocalData();
     } else if (clean === "version mobile" || clean === "mode mobile") {
       setResponse("JARVIS mobile", `Version ${APP_VERSION}. ${bridgeAuthenticated ? "Bridge desktop connecte." : "Mode autonome actif."}`);
     } else if (clean === "fonctionnalites mobile") {
@@ -682,6 +818,10 @@
     if (bridgePairButton) bridgePairButton.addEventListener("click", pairBridge);
     if (bridgeSyncButton) bridgeSyncButton.addEventListener("click", () => syncBridgeData(true));
     if (bridgeDisconnectButton) bridgeDisconnectButton.addEventListener("click", disconnectBridge);
+    if (localTransferButton) localTransferButton.addEventListener("click", importLocalData);
+    if (localExportButton) localExportButton.addEventListener("click", exportLocalData);
+    if (localLoadButton && localLoadInput) localLoadButton.addEventListener("click", () => localLoadInput.click());
+    if (localLoadInput) localLoadInput.addEventListener("change", loadLocalExport);
     if (bridgeCodeInput) {
       bridgeCodeInput.addEventListener("input", () => {
         bridgeCodeInput.value = bridgeCodeInput.value.replace(/\D/g, "").slice(0, 6);

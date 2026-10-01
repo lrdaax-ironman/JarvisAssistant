@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { createJarvisBridge } = require("../bridge-server");
+const { mergeMobileItem } = require("../mobile-import");
 
 test("Bridge serves mobile, pairs a device and protects local data", async () => {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "jarvis-bridge-"));
@@ -17,7 +18,8 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     notes: [],
     reminders: [],
     planning: [],
-    memories: []
+    memories: [],
+    mobileImports: []
   };
 
   const bridge = createJarvisBridge({
@@ -42,7 +44,10 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     addNote: async () => ({ ok: true }),
     addReminder: async () => ({ ok: true }),
     addPlanningItem: async () => ({ ok: true }),
-    addMemory: async () => ({ ok: true })
+    addMemory: async () => ({ ok: true }),
+    importMobileItem: async (payload) => mergeMobileItem(data, payload, {
+      createId: (prefix) => `${prefix}-imported`
+    })
   });
 
   try {
@@ -92,6 +97,21 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     const dataResponse = await fetch(`${baseUrl}/bridge/data`, { headers: authHeaders });
     const dataPayload = await dataResponse.json();
     assert.equal(dataPayload.data.tasks[0].title, "Tester le Bridge");
+
+    const importBody = JSON.stringify({
+      type: "notes",
+      sourceId: "telephone-1:notes:1",
+      item: { id: "1", content: "Note hors ligne", createdAt: "2026-09-30T10:00:00Z" }
+    });
+    const firstImport = await fetch(`${baseUrl}/bridge/import-item`, {
+      method: "POST", headers: authHeaders, body: importBody
+    });
+    const secondImport = await fetch(`${baseUrl}/bridge/import-item`, {
+      method: "POST", headers: authHeaders, body: importBody
+    });
+    assert.equal((await firstImport.json()).imported, true);
+    assert.equal((await secondImport.json()).duplicate, true);
+    assert.equal(data.notes.length, 1);
 
     const aiResponse = await fetch(`${baseUrl}/bridge/ai`, {
       method: "POST",

@@ -117,7 +117,7 @@ function createJarvisBridge(options = {}) {
     ? requestedPort
     : DEFAULT_PORT;
   const host = options.host || "0.0.0.0";
-  const version = sanitizeText(options.version, 40) || "4.5.0";
+  const version = sanitizeText(options.version, 40) || "4.6.0";
   const model = sanitizeText(options.model, 120) || "llama3.2:3b";
   const sessions = new Map();
   const pairingAttempts = new Map();
@@ -392,6 +392,16 @@ function createJarvisBridge(options = {}) {
     }
 
     const body = request.method === "POST" ? await readJsonBody(request) : {};
+
+    if (pathname === "/bridge/import-item" && request.method === "POST") {
+      if (typeof options.importMobileItem !== "function") {
+        sendJson(response, 503, { ok: false, message: "Import mobile indisponible." });
+        return true;
+      }
+      const result = await options.importMobileItem(body);
+      sendJson(response, result && result.ok === false ? 400 : 200, result || { ok: false });
+      return true;
+    }
 
     if (pathname === "/bridge/ai" && request.method === "POST") {
       const message = sanitizeText(body.message, 4000);

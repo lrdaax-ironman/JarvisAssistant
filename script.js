@@ -192,16 +192,16 @@ const moduleStatusElements = {
 };
 
 const metricElements = {
-  cpu: { bar: $("cpu-bar"), value: $("cpu-value"), base: 58 },
-  memory: { bar: $("memory-bar"), value: $("memory-value"), base: 44 },
-  network: { bar: $("network-bar"), value: $("network-value"), base: 82 }
+  cpu: { bar: $("cpu-bar"), value: $("cpu-value") },
+  memory: { bar: $("memory-bar"), value: $("memory-value") },
+  network: { value: $("network-value") }
 };
 
 const SETTINGS_STORAGE_KEY = "jarvisAssistant.settings.v2";
 const HISTORY_STORAGE_KEY = "jarvisAssistant.history.v2";
 const HISTORY_LIMIT = 20;
 const LOCAL_AI_MODEL = "llama3.2:3b";
-const APP_VERSION = "V4.5.0";
+const APP_VERSION = "V4.6.0";
 const DEFAULT_SETTINGS = {
   voiceName: "",
   voiceLang: "",
@@ -769,7 +769,7 @@ function getWebStatusMessage() {
 
 async function getBridgeStatusMessage(detail = "status") {
   const api = getBridgeApi();
-  if (!api) return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.5.";
+  if (!api) return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.6.";
 
   try {
     const status = await api.getBridgeStatus();
@@ -804,7 +804,7 @@ async function getBridgeStatusMessage(detail = "status") {
 async function rotateBridgePairingCode() {
   const api = getBridgeApi();
   if (!api || typeof api.rotateBridgeCode !== "function") {
-    return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.5.";
+    return "Le Bridge JARVIS est disponible uniquement dans la version desktop V4.6.";
   }
 
   try {
@@ -819,7 +819,7 @@ async function rotateBridgePairingCode() {
 
 function getBridgeHelpMessage() {
   return [
-    "Bridge JARVIS V4.5 : ouvrez Version mobile dans le header pour lancer le guide de connexion.",
+    "Bridge JARVIS V4.6 : ouvrez Version mobile dans le header pour lancer le guide de connexion.",
     "Connectez le PC et le telephone au meme Wi-Fi, ouvrez l'adresse affichee, puis revelez le code d'association.",
     "Le Bridge donne acces a Ollama et aux donnees d'organisation locales, sans exposer les commandes Windows a distance."
   ].join("\n");
@@ -3076,16 +3076,38 @@ function updateClock() {
 
 function setMetric(name, value) {
   const metric = metricElements[name];
-  const safeValue = Math.max(8, Math.min(100, value));
+  if (!Number.isFinite(value)) {
+    metric.bar.style.width = "0%";
+    metric.value.textContent = "--";
+    return;
+  }
+  const safeValue = Math.max(0, Math.min(100, Math.round(value)));
   metric.bar.style.width = `${safeValue}%`;
   metric.value.textContent = `${safeValue}%`;
 }
 
-function updateMetrics() {
-  const time = Date.now() / 1000;
-  setMetric("cpu", Math.round(metricElements.cpu.base + Math.sin(time / 3) * 10));
-  setMetric("memory", Math.round(metricElements.memory.base + Math.cos(time / 4) * 8));
-  setMetric("network", Math.round(metricElements.network.base + Math.sin(time / 5) * 6));
+async function updateMetrics() {
+  const api = getDesktopApi();
+  if (!api || typeof api.getSystemMetrics !== "function") {
+    setMetric("cpu", null);
+    setMetric("memory", null);
+    metricElements.network.value.textContent = "Desktop";
+    return null;
+  }
+
+  try {
+    const metrics = await api.getSystemMetrics();
+    setMetric("cpu", metrics.cpuPercent);
+    setMetric("memory", metrics.memoryPercent);
+    metricElements.network.value.textContent = metrics.lanAvailable ? "Connecte" : "Indisponible";
+    return metrics;
+  } catch (error) {
+    console.error("Mesures systeme indisponibles :", error);
+    setMetric("cpu", null);
+    setMetric("memory", null);
+    metricElements.network.value.textContent = "Indisponible";
+    return null;
+  }
 }
 
 async function updateFocusCard() {
@@ -3309,7 +3331,7 @@ function buildStatusReport() {
   const aiText = isAiFallbackEnabled ? `IA locale Ollama active (${LOCAL_AI_MODEL})` : "IA locale en pause";
   const moduleText = activeModuleKey ? `module ${MODULE_LABELS[activeModuleKey]} actif` : "aucun module actif";
   const restText = restTimerInterval ? `repos sport actif (${moduleStatusElements.sport.textContent})` : "repos sport inactif";
-  return `Statut complet : ${systemState.textContent}. Vocal : ${voiceState.textContent}. ${desktopText}. ${workModeText}. ${aiText}. ${moduleText}. CPU ${metricElements.cpu.value.textContent}, memoire ${metricElements.memory.value.textContent}, reseau ${metricElements.network.value.textContent}. ${focusText}. ${restText}. Historique : ${historyEntries.length} entree(s).`;
+  return `Statut complet : ${systemState.textContent}. Vocal : ${voiceState.textContent}. ${desktopText}. ${workModeText}. ${aiText}. ${moduleText}. CPU ${metricElements.cpu.value.textContent}, memoire ${metricElements.memory.value.textContent}, LAN ${metricElements.network.value.textContent}. ${focusText}. ${restText}. Historique : ${historyEntries.length} entree(s).`;
 }
 
 function clearTimedSequences() {
@@ -3319,30 +3341,19 @@ function clearTimedSequences() {
   veilleTimers = [];
 }
 
-function startAnalysisMode() {
+async function startAnalysisMode() {
   clearTimedSequences();
   coreLabel.textContent = "SCAN";
-  setSystemStatus("Analyse en cours...", "Diagnostics actifs");
-  respond("Analyse en cours.");
-
-  [
-    { delay: 800, text: "Scan CPU termine...", metrics: { cpu: 76, memory: 49, network: 88 } },
-    { delay: 1600, text: "Scan memoire termine...", metrics: { cpu: 64, memory: 52, network: 90 } },
-    { delay: 2400, text: "Scan reseau termine...", metrics: { cpu: 61, memory: 46, network: 94 } }
-  ].forEach((step) => {
-    const timer = window.setTimeout(() => {
-      responseBox.textContent = step.text;
-      pulseResponse();
-      Object.entries(step.metrics).forEach(([name, value]) => setMetric(name, value));
-    }, step.delay);
-    analysisTimers.push(timer);
-  });
-
-  analysisTimers.push(window.setTimeout(() => {
-    coreLabel.textContent = "ONLINE";
-    setSystemStatus("Systeme en ligne", "Aucun probleme critique");
-    respond("Analyse terminee. Aucun probleme critique detecte.");
-  }, 3400));
+  setSystemStatus("Mesures en cours...", "Lecture locale");
+  const metrics = await updateMetrics();
+  coreLabel.textContent = "ONLINE";
+  if (!metrics) {
+    setSystemStatus("Mesures indisponibles", "Version desktop requise");
+    respond("Les mesures systeme sont disponibles uniquement dans JARVIS desktop.");
+    return;
+  }
+  setSystemStatus("Mesures actualisees", "CPU, memoire et LAN locaux");
+  respond(`Mesures locales : CPU ${metricElements.cpu.value.textContent}, memoire ${metricElements.memory.value.textContent}, LAN ${metricElements.network.value.textContent}. Ce controle ne remplace pas un diagnostic Windows.`);
 }
 
 function startWatchMode() {
@@ -3921,7 +3932,7 @@ async function handleCommand(command) {
   } else if (cleanCommand === "mode analyse") {
     message = "Bien recu monsieur. Analyse en cours.";
     addHistory(cleanCommand, message);
-    startAnalysisMode();
+    await startAnalysisMode();
     input.value = "";
     return;
   } else if (cleanCommand === "clear") {

@@ -18,6 +18,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   width: 100%;
@@ -129,6 +133,7 @@ input:focus-visible {
 .quick-panel,
 .mobile-summary,
 .bridge-panel,
+.local-transfer-panel,
 .install-panel {
   width: 100%;
   border: 1px solid var(--line);
@@ -142,8 +147,44 @@ input:focus-visible {
 .mobile-grid-section,
 .quick-panel,
 .mobile-summary,
-.bridge-panel {
+.bridge-panel,
+.local-transfer-panel {
   padding: 16px;
+}
+
+.local-transfer-panel {
+  border-color: rgba(255, 200, 87, 0.35);
+}
+
+.local-transfer-panel p,
+.local-transfer-panel small {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.local-transfer-panel p {
+  margin: 0 0 14px;
+}
+
+.local-transfer-panel strong {
+  color: var(--text);
+}
+
+.local-transfer-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.local-transfer-panel button {
+  width: 100%;
+  font-weight: 800;
+}
+
+.local-transfer-panel small {
+  display: block;
+  margin-top: 10px;
+  font-size: 12px;
 }
 
 .bridge-heading {
