@@ -47,6 +47,23 @@ test("reclame un rappel du une seule fois et cree une notification persistante",
   assert.equal(status.notifications[0].entityId, "r1");
 });
 
+test("ne reecrit pas le stockage lorsqu'aucun rappel n'est du", async (t) => {
+  const fixture = await createFixture();
+  t.after(() => fs.rm(fixture.directory, { recursive: true, force: true }));
+  await fixture.store.write({
+    reminders: [{ id: "future", title: "Plus tard", remindAt: "2026-09-01T11:00:00.000Z", done: false }],
+    notifications: []
+  });
+  const before = await fs.stat(fixture.store.paths.primary);
+
+  const result = await fixture.manager.claimDueReminders();
+  const after = await fs.stat(fixture.store.paths.primary);
+
+  assert.equal(result.reminders.length, 0);
+  assert.equal(after.mtimeMs, before.mtimeMs);
+  assert.equal((await fixture.store.read()).notifications.length, 0);
+});
+
 test("termine un rappel depuis une action de notification", async (t) => {
   const fixture = await createFixture();
   t.after(() => fs.rm(fixture.directory, { recursive: true, force: true }));
@@ -82,4 +99,24 @@ test("reprogramme un rappel et le rend de nouveau eligible apres le delai", asyn
   const data = await fixture.store.read();
   assert.equal(data.notifications[0].status, "active");
   assert.equal(data.notifications[1].status, "snoozed");
+});
+
+test("refuse une action issue d'une ancienne notification", async (t) => {
+  const fixture = await createFixture();
+  t.after(() => fs.rm(fixture.directory, { recursive: true, force: true }));
+  await fixture.store.write({
+    reminders: [{ id: "r4", title: "Faire une pause", remindAt: "2026-09-01T09:00:00.000Z", done: false }],
+    notifications: []
+  });
+  const first = await fixture.manager.claimDueReminders();
+  const oldNotificationId = first.notifications[0].id;
+  assert.equal((await fixture.manager.snoozeReminder("r4", 10, oldNotificationId)).ok, true);
+  assert.equal((await fixture.manager.completeReminder("r4", oldNotificationId)).ok, false);
+
+  fixture.setNow("2026-09-01T10:11:00.000Z");
+  const second = await fixture.manager.claimDueReminders();
+  const newNotificationId = second.notifications[0].id;
+  assert.equal((await fixture.manager.completeReminder("r4", newNotificationId)).ok, true);
+  assert.equal((await fixture.manager.snoozeReminder("r4", 10, newNotificationId)).ok, false);
+  assert.equal((await fixture.store.read()).reminders[0].done, true);
 });

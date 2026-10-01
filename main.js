@@ -1474,13 +1474,13 @@ async function updateProactiveSetting(key, value) {
 async function handleReminderNotificationAction(reminderId, action, notificationId = "") {
   let result;
   if (action === "complete") {
-    result = await getProactiveManager().completeReminder(reminderId);
+    result = await getProactiveManager().completeReminder(reminderId, notificationId);
   } else if (action === "snooze") {
-    result = await getProactiveManager().snoozeReminder(reminderId, DEFAULT_SNOOZE_MINUTES);
+    result = await getProactiveManager().snoozeReminder(reminderId, DEFAULT_SNOOZE_MINUTES, notificationId);
   } else {
     result = { ok: false, message: "Action de rappel inconnue." };
   }
-  if (notificationId) await getProactiveManager().markRead(notificationId).catch(() => null);
+  if (result.ok && notificationId) await getProactiveManager().markRead(notificationId).catch(() => null);
   await broadcastNotificationChange();
   sendToRenderer("jarvis:organization-changed", { reminderId, action, result });
   return result;

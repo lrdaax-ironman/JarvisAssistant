@@ -43,6 +43,14 @@ function createProactiveManager({
     const currentTime = currentDate.getTime();
     const currentIso = currentDate.toISOString();
 
+    const snapshot = await store.read();
+    const hasDueReminder = Array.isArray(snapshot.reminders) && snapshot.reminders.some((reminder) => {
+      if (reminder.done || reminder.notifiedAt || !reminder.remindAt) return false;
+      const remindAt = new Date(reminder.remindAt).getTime();
+      return Number.isFinite(remindAt) && remindAt <= currentTime;
+    });
+    if (!hasDueReminder) return { ok: true, reminders: [], notifications: [] };
+
     return store.mutate((data) => {
       ensureCollections(data);
       const claimed = [];
@@ -120,13 +128,18 @@ function createProactiveManager({
     });
   }
 
-  async function completeReminder(reminderId) {
+  async function completeReminder(reminderId, notificationId = "") {
     const safeId = String(reminderId || "");
+    const safeNotificationId = String(notificationId || "");
     const currentIso = now().toISOString();
     return store.mutate((data) => {
       ensureCollections(data);
       const reminder = data.reminders.find((item) => item.id === safeId);
       if (!reminder) return { ok: false, message: "Rappel introuvable." };
+      if (reminder.done) return { ok: false, message: "Ce rappel est deja termine." };
+      if (safeNotificationId && !data.notifications.some((item) => (
+        item.id === safeNotificationId && item.entityId === safeId && item.status === "active"
+      ))) return { ok: false, message: "Cette notification n'est plus active." };
       reminder.done = true;
       reminder.completedAt = currentIso;
       updateRelatedNotifications(data, safeId, "completed", currentIso);
@@ -134,8 +147,9 @@ function createProactiveManager({
     });
   }
 
-  async function snoozeReminder(reminderId, minutes = DEFAULT_SNOOZE_MINUTES) {
+  async function snoozeReminder(reminderId, minutes = DEFAULT_SNOOZE_MINUTES, notificationId = "") {
     const safeId = String(reminderId || "");
+    const safeNotificationId = String(notificationId || "");
     const safeMinutes = normalizeMinutes(minutes);
     const currentDate = now();
     const currentIso = currentDate.toISOString();
@@ -145,6 +159,10 @@ function createProactiveManager({
       ensureCollections(data);
       const reminder = data.reminders.find((item) => item.id === safeId);
       if (!reminder) return { ok: false, message: "Rappel introuvable." };
+      if (reminder.done) return { ok: false, message: "Ce rappel est deja termine." };
+      if (safeNotificationId && !data.notifications.some((item) => (
+        item.id === safeNotificationId && item.entityId === safeId && item.status === "active"
+      ))) return { ok: false, message: "Cette notification n'est plus active." };
       reminder.done = false;
       reminder.completedAt = null;
       reminder.notifiedAt = null;

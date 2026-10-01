@@ -1955,7 +1955,7 @@ body {
 .app-header {
   min-height: 96px;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto minmax(230px, 0.8fr);
+  grid-template-columns: minmax(260px, 1fr) auto auto auto;
   align-items: center;
   gap: 22px;
   padding: 18px 22px;
@@ -2071,10 +2071,12 @@ body {
 
 .top-tabs {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(190px, 1fr));
   gap: 10px;
   padding: 10px;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .top-tabs button,
@@ -2097,6 +2099,7 @@ body {
 .top-tabs button {
   justify-content: center;
   padding: 0 12px;
+  white-space: nowrap;
 }
 
 .top-tabs button span,
