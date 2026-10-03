@@ -1,4 +1,4 @@
-const CACHE_NAME = "jarvis-mobile-v6";
+const CACHE_NAME = "jarvis-mobile-v7";
 const NETWORK_FIRST_ASSETS = ["index.html", "mobile.html", "style.css", "script.js", "voice.css", "mobile.css", "mobile.js", "mobile-command-routing.js", "manifest.json"];
 const CORE_ASSETS = [
   "./",
@@ -51,6 +51,8 @@ self.addEventListener("fetch", (event) => {
   const assetName = requestUrl.pathname.split("/").pop();
   const isNetworkFirstAsset = event.request.mode === "navigate" || NETWORK_FIRST_ASSETS.includes(assetName);
   const offlineResponse = () => new Response("", { status: 504, statusText: "Offline" });
+  const cachedAsset = () => caches.match(event.request)
+    .then((exact) => exact || caches.match(event.request, { ignoreSearch: true }));
   const navigationFallback = () => caches.match("./mobile.html")
     .then((fallback) => fallback || caches.match("./index.html"))
     .then((fallback) => fallback || offlineResponse());
@@ -61,24 +63,28 @@ self.addEventListener("fetch", (event) => {
         .then((networkResponse) => {
           if (networkResponse && networkResponse.ok) {
             const responseClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+            event.waitUntil(caches.open(CACHE_NAME)
+              .then((cache) => cache.put(event.request, responseClone))
+              .catch(() => null));
           }
           return networkResponse;
         })
-        .catch(() => caches.match(event.request).then((cachedResponse) => cachedResponse || offlineResponse()))
-      : caches.match(event.request).then((cachedResponse) => {
+        .catch(() => cachedAsset().then((cachedResponse) => cachedResponse || offlineResponse()))
+      : cachedAsset().then((cachedResponse) => {
       if (cachedResponse) return cachedResponse;
 
       return fetch(event.request)
         .then((networkResponse) => {
           if (!networkResponse || !networkResponse.ok) return networkResponse;
           const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          event.waitUntil(caches.open(CACHE_NAME)
+            .then((cache) => cache.put(event.request, responseClone))
+            .catch(() => null));
           return networkResponse;
         })
         .catch(() => {
           if (event.request.mode === "navigate") return navigationFallback();
-          return caches.match(event.request).then((fallback) => fallback || offlineResponse());
+          return cachedAsset().then((fallback) => fallback || offlineResponse());
         });
     }))
   );

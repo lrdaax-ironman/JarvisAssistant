@@ -299,6 +299,7 @@ input:focus-visible {
 
 .response-card {
   min-height: 156px;
+  scroll-margin-top: 96px;
   display: flex;
   flex-direction: column;
   justify-content: center;

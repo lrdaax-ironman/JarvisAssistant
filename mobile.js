@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "4.6.0 mobile";
+  const APP_VERSION = "4.6.1 mobile";
   const STORAGE_PREFIX = "jarvis-mobile:";
   const BRIDGE_TOKEN_KEY = `${STORAGE_PREFIX}bridge-token`;
   const DEVICE_ID_KEY = `${STORAGE_PREFIX}device-id`;
@@ -247,6 +247,10 @@
       ${items.length ? `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
     `;
     setStatus("Pret");
+    if (typeof responseBox.scrollIntoView === "function") {
+      const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      responseBox.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    }
   }
 
   function formatList(items, emptyText) {

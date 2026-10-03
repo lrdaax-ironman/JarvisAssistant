@@ -24,6 +24,8 @@ Le nouvel installateur est cree dans `dist/` de ce meme depot. `node_modules/` e
 - Les donnees mobiles restent distinctes de celles du PC. Depuis la page Bridge, `Actualiser PC` recharge seulement les donnees desktop. `Importer vers le PC` copie volontairement les donnees du navigateur ; relancer l'import ne cree pas de doublons et ne supprime pas les originaux.
 - La PWA Vercel et la page Bridge ont des stockages navigateur differents. Depuis Vercel, utiliser `Exporter mes donnees`, puis ouvrir la page Bridge sur le telephone, `Charger un export` et confirmer `Importer vers le PC`. Le fichier JSON contient les donnees mobiles et doit rester prive.
 
+Correctif V4.6.1 : toucher une carte mobile ramene la reponse dans la zone visible. Le cache hors ligne retrouve aussi les scripts dont l'URL porte un numero de version.
+
 ## Version PWA mobile
 
 JARVIS dispose d'une version mobile dediee avec deux fonctionnements : autonome sur le web, ou reliee au desktop par le Bridge local.
@@ -79,7 +81,7 @@ Notes :
 - La version mobile utilise `localStorage` pour les notes, taches, rappels, planning, memoire et preferences simples.
 - `mobile.js` ne depend pas de `window.jarvisAPI` et reste stable dans un navigateur mobile.
 - Le service worker est enregistre uniquement en contexte web `http` ou `https`, pas en `file://` Electron.
-- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v6` utilise une strategie network-first pour les fichiers d'interface.
+- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v7` utilise une strategie network-first pour les fichiers d'interface.
 
 ## Consolidation V4.3
 

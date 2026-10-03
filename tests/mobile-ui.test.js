@@ -7,11 +7,18 @@ const routing = require("../mobile-command-routing");
 const { mergeMobileItem } = require("../mobile-import");
 
 const mobileSource = fs.readFileSync(path.join(__dirname, "..", "mobile.js"), "utf8");
+const mobileMarkup = fs.readFileSync(path.join(__dirname, "..", "mobile.html"), "utf8");
+const cardCommands = [...new Set([...mobileMarkup.matchAll(/data-mobile-command="([^"]+)"/g)].map((match) => match[1]))];
 
 function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
   const values = new Map(Object.entries(initialStorage));
   const elements = new Map();
   const handlers = new Map();
+  const commandButtons = new Map(cardCommands.map((command) => [command, {
+    dataset: { mobileCommand: command },
+    listeners: {},
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+  }]));
   const desktopData = bridge && bridge.data;
   const blobs = new Map();
   let downloadedContents = null;
@@ -21,6 +28,8 @@ function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
       elements.set(id, {
         id, value: "", textContent: "", innerHTML: "", hidden: false, disabled: false, dataset: {},
         listeners: {},
+        scrollCalls: 0,
+        scrollIntoView() { this.scrollCalls += 1; },
         addEventListener(name, callback) { this.listeners[name] = callback; }
       });
     }
@@ -44,7 +53,7 @@ function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
   };
   const document = {
     getElementById: element,
-    querySelectorAll: () => [],
+    querySelectorAll: (selector) => selector === "[data-mobile-command]" ? [...commandButtons.values()] : [],
     body: { appendChild() {} },
     createElement: () => ({
       href: "", download: "",
@@ -86,8 +95,32 @@ function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
     Blob: FakeBlob, URL: urlApi
   });
 
-  return { element, storage, desktopData, downloaded: () => downloadedContents, init: () => handlers.get("DOMContentLoaded")() };
+  return {
+    element, storage, desktopData,
+    commandButton: (command) => commandButtons.get(command),
+    downloaded: () => downloadedContents,
+    init: () => handlers.get("DOMContentLoaded")()
+  };
 }
+
+test("les cartes mobiles affichent leur reponse dans la zone visible", async () => {
+  const page = createMobilePage();
+  await page.init();
+  const response = page.element("assistant-response");
+  const cards = ["ia", "taches", "notes", "rappels", "planning", "memoire", "mode mobile", "parametres"];
+
+  for (const command of cards) {
+    const button = page.commandButton(command);
+    assert.equal(typeof button.listeners.click, "function", `${command} doit etre cliquable`);
+    await button.listeners.click();
+    assert.match(response.innerHTML, /<strong>.+<\/strong>/);
+  }
+
+  assert.equal(response.scrollCalls, cards.length);
+  await page.commandButton("aide").listeners.click();
+  assert.match(response.innerHTML, /Aide mobile/);
+  assert.equal(response.scrollCalls, cards.length + 1);
+});
 
 test("parcours mobile autonome : note locale et commande desktop bloquee", async () => {
   const page = createMobilePage();

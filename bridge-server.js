@@ -117,7 +117,7 @@ function createJarvisBridge(options = {}) {
     ? requestedPort
     : DEFAULT_PORT;
   const host = options.host || "0.0.0.0";
-  const version = sanitizeText(options.version, 40) || "4.6.0";
+  const version = sanitizeText(options.version, 40) || "4.6.1";
   const model = sanitizeText(options.model, 120) || "llama3.2:3b";
   const sessions = new Map();
   const pairingAttempts = new Map();
