@@ -1,9 +1,10 @@
 (() => {
-  const APP_VERSION = "4.6.1 mobile";
+  const APP_VERSION = "4.6.2 mobile";
   const STORAGE_PREFIX = "jarvis-mobile:";
   const BRIDGE_TOKEN_KEY = `${STORAGE_PREFIX}bridge-token`;
   const DEVICE_ID_KEY = `${STORAGE_PREFIX}device-id`;
   const TRANSFER_TYPES = ["tasks", "notes", "reminders", "planning", "memories"];
+  const IMPORT_BATCH_SIZE = 50;
   const DESKTOP_ONLY_COMMANDS = new Set([
     "ouvrir documents", "ouvre documents", "ouvrir bureau", "ouvre bureau",
     "ouvrir calculatrice", "ouvre calculatrice", "ouvrir navigateur", "ouvre navigateur",
@@ -376,9 +377,14 @@
           updateBridgeUi();
           updateCounts();
         }
-        throw new Error(payload.message || `Erreur Bridge ${response.status}.`);
+        const error = new Error(payload.message || `Erreur Bridge ${response.status}.`);
+        error.status = response.status;
+        throw error;
       }
       return payload;
+    } catch (error) {
+      if (error.name === "AbortError") throw new Error("Le Bridge met trop de temps a repondre. Verifiez que JARVIS est ouvert sur le PC.");
+      throw error;
     } finally {
       window.clearTimeout(timeout);
     }
@@ -483,25 +489,52 @@
     let duplicates = 0;
     try {
       const deviceId = transfer.deviceId || getDeviceId();
-      for (const { type, item } of items) {
-        if (!item || typeof item.id !== "string" || !/^[a-zA-Z0-9_-]{1,70}$/.test(item.id)) {
-          throw new Error("Un element mobile n'a pas d'identifiant valide. Aucune suppression n'a eu lieu.");
+      const invalidIndex = items.findIndex((entry) => (
+        !entry || !TRANSFER_TYPES.includes(entry.type) || !entry.item
+        || typeof entry.item.id !== "string" || !/^[a-zA-Z0-9_-]{1,70}$/.test(entry.item.id)
+      ));
+      if (invalidIndex >= 0) throw new Error(`Identifiant invalide dans l'element ${invalidIndex + 1}. Aucune suppression n'a eu lieu.`);
+
+      setResponse("Import en cours", `${items.length} element(s) a copier. Gardez cette page ouverte jusqu'a la confirmation.`);
+      for (let start = 0; start < items.length; start += IMPORT_BATCH_SIZE) {
+        const batch = items.slice(start, start + IMPORT_BATCH_SIZE);
+        setStatus(`Import ${Math.min(start + batch.length, items.length)}/${items.length}`);
+        try {
+          const result = await bridgeRequest("/bridge/import-batch", {
+            method: "POST", body: { deviceId, items: batch }, timeoutMs: 30000
+          });
+          imported += Number(result.imported) || 0;
+          duplicates += Number(result.duplicates) || 0;
+        } catch (error) {
+          if (error.status !== 404) throw error;
+          for (const { type, item } of batch) {
+            const result = await bridgeRequest("/bridge/import-item", {
+              method: "POST", body: { type, item, sourceId: `${deviceId}:${type}:${item.id}` }, timeoutMs: 20000
+            });
+            if (result.imported) imported += 1;
+            else duplicates += 1;
+            if ((imported + duplicates) % 5 === 0) {
+              setResponse("Import en cours", `${imported + duplicates}/${items.length} element(s) traites. Gardez cette page ouverte.`);
+            }
+          }
         }
-        setStatus(`Import ${imported + duplicates + 1}/${items.length}`);
-        const result = await bridgeRequest("/bridge/import-item", {
-          method: "POST",
-          body: { type, item, sourceId: `${deviceId}:${type}:${item.id}` }
-        });
-        if (result.imported) imported += 1;
-        else duplicates += 1;
+        setResponse("Import en cours", `${imported + duplicates}/${items.length} element(s) traites. ${imported} copie(s), ${duplicates} deja presents.`);
       }
-      await syncBridgeData(false);
-      setResponse("Import termine", `${imported} element(s) copies vers le PC, ${duplicates} deja presents. Les originaux restent sur ce telephone.`);
+
+      let refreshed = false;
+      try {
+        const result = await bridgeRequest("/bridge/data", { timeoutMs: 15000 });
+        bridgeData = result.data || null;
+        updateCounts();
+        refreshed = true;
+      } catch (_error) {
+        // La copie deja confirmee reste valide meme si la vue ne se rafraichit pas.
+      }
+      setResponse("Import termine", `${imported} element(s) copies vers le PC, ${duplicates} deja presents. Les originaux restent sur ce telephone.${refreshed ? "" : " La vue PC n'a pas pu etre actualisee : utilisez Actualiser PC."}`);
       loadedTransfer = null;
       return true;
     } catch (error) {
-      await syncBridgeData(false);
-      setResponse("Import interrompu", `${imported} element(s) copies. ${error.message || "Connexion interrompue."} Relancez l'import pour reprendre sans doublons.`);
+      setResponse("Import interrompu", `${imported} element(s) copies, ${duplicates} deja presents. ${error.message || "Connexion interrompue."} Relancez l'import pour reprendre sans doublons.`);
       return false;
     } finally {
       if (localTransferButton) localTransferButton.disabled = false;

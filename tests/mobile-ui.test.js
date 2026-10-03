@@ -4,7 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 const routing = require("../mobile-command-routing");
-const { mergeMobileItem } = require("../mobile-import");
+const { mergeMobileItem, mergeMobileItems } = require("../mobile-import");
 
 const mobileSource = fs.readFileSync(path.join(__dirname, "..", "mobile.js"), "utf8");
 const mobileMarkup = fs.readFileSync(path.join(__dirname, "..", "mobile.html"), "utf8");
@@ -22,6 +22,8 @@ function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
   const desktopData = bridge && bridge.data;
   const blobs = new Map();
   let downloadedContents = null;
+  let nextImportedId = 0;
+  const bridgeCalls = [];
 
   function element(id) {
     if (!elements.has(id)) {
@@ -77,13 +79,22 @@ function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
 
   async function fetchBridge(pathname, options = {}) {
     if (!bridge) throw new Error("Bridge hors ligne");
+    bridgeCalls.push(pathname);
     let result;
     if (pathname === "/bridge/status") result = { ok: true, bridge: true, authenticated: true };
     else if (pathname === "/bridge/data") result = { ok: true, data: desktopData };
     else if (pathname === "/bridge/summary") result = { ok: true, summary: { counts: {}, ollama: { ok: true } } };
-    else if (pathname === "/bridge/import-item") {
+    else if (pathname === "/bridge/import-batch" && bridge.legacyImport) {
+      result = { ok: false, message: "Route Bridge introuvable." };
+      return { ok: false, status: 404, text: async () => JSON.stringify(result) };
+    } else if (pathname === "/bridge/import-batch") {
+      if (bridge.importGate) await bridge.importGate;
+      result = mergeMobileItems(desktopData, JSON.parse(options.body), {
+        createId: (prefix) => `${prefix}-${++nextImportedId}`
+      });
+    } else if (pathname === "/bridge/import-item") {
       result = mergeMobileItem(desktopData, JSON.parse(options.body), {
-        createId: (prefix) => `${prefix}-${desktopData.mobileImports.length + 1}`
+        createId: (prefix) => `${prefix}-${++nextImportedId}`
       });
     } else throw new Error(`Route inattendue : ${pathname}`);
     return { ok: result.ok, status: result.ok ? 200 : 400, text: async () => JSON.stringify(result) };
@@ -96,7 +107,7 @@ function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
   });
 
   return {
-    element, storage, desktopData,
+    element, storage, desktopData, bridgeCalls,
     commandButton: (command) => commandButtons.get(command),
     downloaded: () => downloadedContents,
     init: () => handlers.get("DOMContentLoaded")()
@@ -157,10 +168,13 @@ test("parcours Bridge : affichage PC, import volontaire et reconnexion sans doub
   assert.equal(page.element("local-transfer-panel").hidden, false);
   assert.match(page.element("local-transfer-count").textContent, /1 element/);
 
+  const summaryCallsBeforeImport = page.bridgeCalls.filter((path) => path === "/bridge/summary").length;
   await page.element("local-transfer-button").listeners.click();
   assert.equal(desktopData.notes.length, 1);
   assert.equal(page.element("notes-count").textContent, "1 note");
   assert.equal(JSON.parse(page.storage.getItem("jarvis-mobile:notes")).length, 1);
+  assert.ok(page.bridgeCalls.includes("/bridge/import-batch"));
+  assert.equal(page.bridgeCalls.filter((path) => path === "/bridge/summary").length, summaryCallsBeforeImport);
 
   await page.element("local-transfer-button").listeners.click();
   assert.equal(desktopData.notes.length, 1);
@@ -171,6 +185,44 @@ test("parcours Bridge : affichage PC, import volontaire et reconnexion sans doub
   assert.equal(page.element("local-transfer-panel").hidden, false);
   assert.equal(page.element("local-export-button").hidden, false);
   assert.equal(page.element("local-transfer-button").hidden, true);
+});
+
+test("l'import indique immediatement qu'il travaille avant la reponse du PC", async () => {
+  let releaseImport;
+  const importGate = new Promise((resolve) => { releaseImport = resolve; });
+  const desktopData = { tasks: [], notes: [], reminders: [], planning: [], memories: [], mobileImports: [] };
+  const page = createMobilePage({
+    initialStorage: {
+      "jarvis-mobile:bridge-token": "token-test",
+      "jarvis-mobile:notes": JSON.stringify([{ id: "offline-1", content: "Note en attente" }])
+    },
+    bridge: { data: desktopData, importGate }
+  });
+  await page.init();
+
+  const pending = page.element("local-transfer-button").listeners.click();
+  assert.match(page.element("assistant-response").innerHTML, /Import en cours/);
+  assert.equal(page.element("local-transfer-button").disabled, true);
+  releaseImport();
+  await pending;
+  assert.match(page.element("assistant-response").innerHTML, /Import termine/);
+  assert.equal(page.element("local-transfer-button").disabled, false);
+});
+
+test("l'import reste compatible avec un Bridge qui ne connait que l'ancienne route", async () => {
+  const desktopData = { tasks: [], notes: [], reminders: [], planning: [], memories: [], mobileImports: [] };
+  const page = createMobilePage({
+    initialStorage: {
+      "jarvis-mobile:bridge-token": "token-test",
+      "jarvis-mobile:notes": JSON.stringify([{ id: "offline-1", content: "Ancienne connexion" }])
+    },
+    bridge: { data: desktopData, legacyImport: true }
+  });
+  await page.init();
+  await page.element("local-transfer-button").listeners.click();
+  assert.equal(desktopData.notes[0].content, "Ancienne connexion");
+  assert.ok(page.bridgeCalls.includes("/bridge/import-item"));
+  assert.match(page.element("assistant-response").innerHTML, /Import termine/);
 });
 
 test("parcours inter-origines : charge un export Vercel dans le Bridge", async () => {

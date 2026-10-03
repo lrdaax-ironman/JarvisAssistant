@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { mergeMobileItem } = require("../mobile-import");
+const { mergeMobileItem, mergeMobileItems } = require("../mobile-import");
 
 function fixture() {
   const data = { tasks: [], notes: [], reminders: [], planning: [], memories: [], mobileImports: [] };
@@ -55,4 +55,34 @@ test("refuse un transfert invalide sans modifier les donnees", () => {
   assert.equal(mergeMobileItem(data, { type: "notes", sourceId: "valid", item: { content: "a".repeat(1201) } }, options).ok, false);
   assert.equal(data.mobileImports.length, 0);
   assert.equal(data.notes.length, 0);
+});
+
+test("importe un lot et ignore les doublons a la reprise", () => {
+  const { data, options } = fixture();
+  const payload = {
+    deviceId: "telephone-1",
+    items: [
+      { type: "notes", item: { id: "note-1", content: "Idee" } },
+      { type: "tasks", item: { id: "task-1", content: "Tester Jarvis" } }
+    ]
+  };
+  assert.deepEqual(mergeMobileItems(data, payload, options), { ok: true, imported: 2, duplicates: 0 });
+  assert.deepEqual(mergeMobileItems(data, payload, options), { ok: true, imported: 0, duplicates: 2 });
+  assert.equal(data.notes.length, 1);
+  assert.equal(data.tasks.length, 1);
+});
+
+test("un element invalide annule tout le lot", () => {
+  const { data, options } = fixture();
+  const result = mergeMobileItems(data, {
+    deviceId: "telephone-1",
+    items: [
+      { type: "notes", item: { id: "note-1", content: "A conserver" } },
+      { type: "notes", item: { id: "note-2", content: "x".repeat(1201) } }
+    ]
+  }, options);
+  assert.equal(result.ok, false);
+  assert.match(result.message, /element 2/);
+  assert.equal(data.notes.length, 0);
+  assert.equal(data.mobileImports.length, 0);
 });

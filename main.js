@@ -6,7 +6,7 @@ const QRCode = require("qrcode");
 const { createBackupManager } = require("./backup-manager");
 const { createJarvisBridge } = require("./bridge-server");
 const { createMemoryStore } = require("./memory-store");
-const { mergeMobileItem } = require("./mobile-import");
+const { mergeMobileItem, mergeMobileItems } = require("./mobile-import");
 const { createProactiveManager, DEFAULT_SNOOZE_MINUTES } = require("./proactive-manager");
 const { createSystemMetricsSampler } = require("./system-metrics");
 
@@ -1689,6 +1689,9 @@ async function startJarvisBridge() {
     addReminder,
     addPlanningItem,
     importMobileItem: (payload) => mutateMemoryData((data) => mergeMobileItem(data, payload, {
+      createId: createLocalId
+    })),
+    importMobileBatch: (payload) => mutateMemoryData((data) => mergeMobileItems(data, payload, {
       createId: createLocalId
     }))
   });

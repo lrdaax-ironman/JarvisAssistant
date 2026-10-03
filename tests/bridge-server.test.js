@@ -4,7 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { createJarvisBridge } = require("../bridge-server");
-const { mergeMobileItem } = require("../mobile-import");
+const { mergeMobileItem, mergeMobileItems } = require("../mobile-import");
 
 test("Bridge serves mobile, pairs a device and protects local data", async () => {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "jarvis-bridge-"));
@@ -47,6 +47,9 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     addMemory: async () => ({ ok: true }),
     importMobileItem: async (payload) => mergeMobileItem(data, payload, {
       createId: (prefix) => `${prefix}-imported`
+    }),
+    importMobileBatch: async (payload) => mergeMobileItems(data, payload, {
+      createId: (prefix) => `${prefix}-batch-${data.mobileImports.length + 1}`
     })
   });
 
@@ -112,6 +115,24 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     assert.equal((await firstImport.json()).imported, true);
     assert.equal((await secondImport.json()).duplicate, true);
     assert.equal(data.notes.length, 1);
+
+    const batchBody = JSON.stringify({
+      deviceId: "telephone-1",
+      items: [
+        { type: "notes", item: { id: "2", content: "Note par lot" } },
+        { type: "tasks", item: { id: "3", content: "Tache par lot" } }
+      ]
+    });
+    const blockedBatch = await fetch(`${baseUrl}/bridge/import-batch`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: batchBody
+    });
+    assert.equal(blockedBatch.status, 401);
+    const batchResponse = await fetch(`${baseUrl}/bridge/import-batch`, {
+      method: "POST", headers: authHeaders, body: batchBody
+    });
+    assert.deepEqual(await batchResponse.json(), { ok: true, imported: 2, duplicates: 0 });
+    assert.equal(data.notes.length, 2);
+    assert.equal(data.tasks.length, 2);
 
     const aiResponse = await fetch(`${baseUrl}/bridge/ai`, {
       method: "POST",

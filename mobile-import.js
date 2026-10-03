@@ -1,4 +1,5 @@
 const IMPORT_TYPES = new Set(["tasks", "notes", "reminders", "planning", "memories"]);
+const MAX_IMPORT_BATCH = 50;
 
 function validIso(value, fallback) {
   if (typeof value !== "string") return fallback;
@@ -57,4 +58,40 @@ function mergeMobileItem(data, payload, { now = () => new Date(), createId } = {
   return { ok: true, imported: true, duplicate: false, item: imported };
 }
 
-module.exports = { mergeMobileItem };
+function mergeMobileItems(data, payload, options = {}) {
+  const deviceId = payload && payload.deviceId;
+  const items = payload && payload.items;
+  if (typeof deviceId !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(deviceId)) {
+    return { ok: false, message: "Identifiant du telephone invalide." };
+  }
+  if (!Array.isArray(items) || items.length < 1 || items.length > MAX_IMPORT_BATCH) {
+    return { ok: false, message: `Envoyez entre 1 et ${MAX_IMPORT_BATCH} elements par lot.` };
+  }
+
+  const working = { mobileImports: [...(Array.isArray(data.mobileImports) ? data.mobileImports : [])] };
+  for (const type of IMPORT_TYPES) working[type] = [...(Array.isArray(data[type]) ? data[type] : [])];
+
+  let imported = 0;
+  let duplicates = 0;
+  for (const [index, entry] of items.entries()) {
+    const item = entry && entry.item;
+    if (!item || typeof item !== "object" || Array.isArray(item)
+      || typeof item.id !== "string" || !/^[a-zA-Z0-9_-]{1,70}$/.test(item.id)) {
+      return { ok: false, message: `Identifiant mobile invalide (element ${index + 1}).` };
+    }
+    const result = mergeMobileItem(working, {
+      type: entry.type,
+      item,
+      sourceId: `${deviceId}:${entry.type}:${item.id}`
+    }, options);
+    if (!result.ok) return { ok: false, message: `${result.message} (element ${index + 1}).` };
+    if (result.imported) imported += 1;
+    else duplicates += 1;
+  }
+
+  for (const type of IMPORT_TYPES) data[type] = working[type];
+  data.mobileImports = working.mobileImports;
+  return { ok: true, imported, duplicates };
+}
+
+module.exports = { mergeMobileItem, mergeMobileItems, MAX_IMPORT_BATCH };

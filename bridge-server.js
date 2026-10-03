@@ -6,6 +6,7 @@ const path = require("node:path");
 
 const DEFAULT_PORT = 3210;
 const MAX_BODY_BYTES = 16 * 1024;
+const MAX_IMPORT_BODY_BYTES = 512 * 1024;
 const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
 const PAIRING_WINDOW_MS = 60 * 1000;
 const MAX_PAIRING_ATTEMPTS = 5;
@@ -117,7 +118,7 @@ function createJarvisBridge(options = {}) {
     ? requestedPort
     : DEFAULT_PORT;
   const host = options.host || "0.0.0.0";
-  const version = sanitizeText(options.version, 40) || "4.6.1";
+  const version = sanitizeText(options.version, 40) || "4.6.2";
   const model = sanitizeText(options.model, 120) || "llama3.2:3b";
   const sessions = new Map();
   const pairingAttempts = new Map();
@@ -166,14 +167,14 @@ function createJarvisBridge(options = {}) {
     }
   }
 
-  async function readJsonBody(request) {
+  async function readJsonBody(request, maxBytes = MAX_BODY_BYTES) {
     return new Promise((resolve, reject) => {
       const chunks = [];
       let totalBytes = 0;
 
       request.on("data", (chunk) => {
         totalBytes += chunk.length;
-        if (totalBytes > MAX_BODY_BYTES) {
+        if (totalBytes > maxBytes) {
           reject(Object.assign(new Error("Corps de requete trop volumineux."), { statusCode: 413 }));
           request.destroy();
           return;
@@ -391,7 +392,19 @@ function createJarvisBridge(options = {}) {
       return true;
     }
 
-    const body = request.method === "POST" ? await readJsonBody(request) : {};
+    const body = request.method === "POST"
+      ? await readJsonBody(request, pathname === "/bridge/import-batch" ? MAX_IMPORT_BODY_BYTES : MAX_BODY_BYTES)
+      : {};
+
+    if (pathname === "/bridge/import-batch" && request.method === "POST") {
+      if (typeof options.importMobileBatch !== "function") {
+        sendJson(response, 503, { ok: false, message: "Import mobile indisponible." });
+        return true;
+      }
+      const result = await options.importMobileBatch(body);
+      sendJson(response, result && result.ok === false ? 400 : 200, result || { ok: false });
+      return true;
+    }
 
     if (pathname === "/bridge/import-item" && request.method === "POST") {
       if (typeof options.importMobileItem !== "function") {
