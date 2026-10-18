@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = "4.6.2 mobile";
+  const APP_VERSION = "4.7.0 mobile";
   const STORAGE_PREFIX = "jarvis-mobile:";
   const BRIDGE_TOKEN_KEY = `${STORAGE_PREFIX}bridge-token`;
   const DEVICE_ID_KEY = `${STORAGE_PREFIX}device-id`;
@@ -43,8 +43,11 @@
   const localTransferDetail = $("local-transfer-detail");
   const localTransferButton = $("local-transfer-button");
   const localExportButton = $("local-export-button");
+  const desktopExportButton = $("desktop-export-button");
+  const phoneImportButton = $("phone-import-button");
   const localLoadButton = $("local-load-button");
   const localLoadInput = $("local-load-input");
+  const localTransferHelp = $("local-transfer-help");
 
   let deferredInstallPrompt = null;
   let bridgeAvailable = false;
@@ -148,6 +151,10 @@
     return loadedTransfer || { deviceId: null, items: getLocalTransferItems() };
   }
 
+  function isPwaOrigin() {
+    return location.protocol === "https:" || location.hostname === "localhost";
+  }
+
   function getDeviceId() {
     try {
       const existing = localStorage.getItem(DEVICE_ID_KEY);
@@ -164,17 +171,36 @@
   function updateLocalTransferUi() {
     if (!localTransferPanel) return;
     const localCount = getLocalTransferItems().length;
-    const count = getSelectedTransfer().items.length;
-    localTransferPanel.hidden = !bridgeAuthenticated && localCount === 0;
+    const transfer = getSelectedTransfer();
+    const count = transfer.items.length;
+    const desktopFile = loadedTransfer && loadedTransfer.format === "jarvis-desktop-v1";
+    localTransferPanel.hidden = false;
     if (localTransferCount) localTransferCount.textContent = `${count} element${count > 1 ? "s" : ""}`;
     if (localTransferDetail) {
       localTransferDetail.textContent = loadedTransfer
-        ? " dans l'export charge. Cet import reste volontaire."
+        ? ` dans l'export ${desktopFile ? "PC" : "mobile"} charge. Aucun import n'est automatique.`
         : " dans ce navigateur. La connexion au PC ne les transfere pas automatiquement.";
     }
     if (localExportButton) localExportButton.hidden = localCount === 0;
-    if (localLoadButton) localLoadButton.hidden = !bridgeAuthenticated;
-    if (localTransferButton) localTransferButton.hidden = !bridgeAuthenticated || count === 0;
+    if (desktopExportButton) desktopExportButton.hidden = !bridgeAuthenticated;
+    if (localTransferButton) localTransferButton.hidden = !bridgeAuthenticated || desktopFile || count === 0;
+    if (phoneImportButton) phoneImportButton.hidden = !desktopFile || !isPwaOrigin() || count === 0;
+    if (localTransferHelp) {
+      localTransferHelp.textContent = desktopFile && !isPwaOrigin()
+        ? "Ouvrez votre PWA HTTPS, chargez-y ce fichier, puis confirmez l'import sur le telephone. Cette page Bridge possede un stockage distinct."
+        : "PC vers PWA : exportez depuis la page Bridge, puis chargez ce fichier dans votre PWA. Mobile vers PC : exportez dans la PWA, chargez sur la page Bridge, puis confirmez. Les originaux restent en place.";
+    }
+  }
+
+  function downloadJson(payload, filename) {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function exportLocalData() {
@@ -182,17 +208,29 @@
     if (!items.length) return setResponse("Aucune donnee", "Rien a exporter depuis ce navigateur.");
     try {
       const payload = { format: "jarvis-mobile-v1", deviceId: getDeviceId(), items };
-      const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `jarvis-mobile-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      downloadJson(payload, `jarvis-mobile-${new Date().toISOString().slice(0, 10)}.json`);
       setResponse("Export pret", `${items.length} element(s) mobiles dans le fichier JSON. Chargez-le sur la page Bridge du PC pour les copier.`);
     } catch (error) {
       setResponse("Export impossible", error.message || "Le navigateur ne permet pas cet export.");
+    }
+  }
+
+  async function exportDesktopData() {
+    if (!bridgeAuthenticated) return setResponse("Bridge non connecte", "Associez d'abord ce telephone avec JARVIS desktop.");
+    if (desktopExportButton) desktopExportButton.disabled = true;
+    setStatus("Export PC");
+    try {
+      const result = await bridgeRequest("/bridge/export-mobile", { timeoutMs: 30000 });
+      const payload = result.export;
+      if (!payload || payload.format !== "jarvis-desktop-v1" || !Array.isArray(payload.items)) {
+        throw new Error("L'export PC est invalide. Mettez JARVIS desktop a jour.");
+      }
+      downloadJson(payload, `jarvis-desktop-${new Date().toISOString().slice(0, 10)}.json`);
+      setResponse("Export PC pret", `${payload.items.length} element(s) dans le fichier JSON. Ouvrez votre PWA installee, chargez ce fichier, puis confirmez l'import sur le telephone.`);
+    } catch (error) {
+      setResponse("Export PC impossible", error.status === 404 ? "Mettez JARVIS desktop a jour vers la V4.7." : error.message);
+    } finally {
+      if (desktopExportButton) desktopExportButton.disabled = false;
     }
   }
 
@@ -202,21 +240,104 @@
     try {
       if (file.size > 10 * 1024 * 1024) throw new Error("Fichier trop volumineux (maximum 10 Mo).");
       const payload = JSON.parse(await file.text());
-      if (payload.format !== "jarvis-mobile-v1" || !/^[a-zA-Z0-9_-]{1,80}$/.test(payload.deviceId)) {
-        throw new Error("Ce fichier n'est pas un export JARVIS mobile valide.");
+      const mobileFile = payload && payload.format === "jarvis-mobile-v1";
+      const desktopFile = payload && payload.format === "jarvis-desktop-v1";
+      if (!mobileFile && !desktopFile) throw new Error("Ce fichier n'est pas un export JARVIS reconnu.");
+      if (mobileFile && !/^[a-zA-Z0-9_-]{1,80}$/.test(payload.deviceId)) {
+        throw new Error("Identifiant de l'export mobile invalide.");
       }
       if (!Array.isArray(payload.items) || payload.items.length > 5000 || payload.items.some((entry) => (
         !entry || !TRANSFER_TYPES.includes(entry.type) || !entry.item || typeof entry.item.id !== "string"
-      ))) throw new Error("Liste d'elements mobiles invalide ou trop longue.");
-      loadedTransfer = { deviceId: payload.deviceId, items: payload.items };
+        || !entry.item.id.trim() || entry.item.id.length > 120
+      ))) throw new Error("Liste d'elements invalide ou trop longue.");
+      loadedTransfer = { format: payload.format, deviceId: mobileFile ? payload.deviceId : null, items: payload.items };
       updateLocalTransferUi();
-      setResponse("Export charge", `${payload.items.length} element(s) prets. Appuyez sur Importer vers le PC pour confirmer la copie.`);
+      const direction = desktopFile
+        ? (isPwaOrigin() ? "Appuyez sur Importer sur ce telephone pour confirmer la copie." : "Ouvrez la PWA HTTPS et chargez-y ce fichier pour l'importer sur votre telephone.")
+        : "Sur la page Bridge, appuyez sur Importer vers le PC pour confirmer la copie.";
+      const preview = TRANSFER_TYPES.map((type) => {
+        const count = payload.items.filter((entry) => entry.type === type).length;
+        return count ? `${type} : ${count}` : "";
+      }).filter(Boolean);
+      setResponse("Export charge", `${payload.items.length} element(s) depuis ${desktopFile ? "le PC" : "le mobile"}. ${direction}`, preview);
     } catch (error) {
       loadedTransfer = null;
       updateLocalTransferUi();
       setResponse("Export refuse", error.message || "Fichier illisible.");
     } finally {
       if (localLoadInput) localLoadInput.value = "";
+    }
+  }
+
+  function copyDesktopItem(type, item) {
+    const content = (type === "notes" || type === "memories" ? item.content : item.title);
+    if (typeof content !== "string" || !content.trim()) throw new Error(`Texte invalide dans ${type}.`);
+    const createdAt = typeof item.createdAt === "string" && !Number.isNaN(Date.parse(item.createdAt))
+      ? new Date(item.createdAt).toISOString() : new Date().toISOString();
+    const copy = createItem(content.trim(), { createdAt, sourceId: `desktop:${type}:${item.id}` });
+    if (type === "tasks") {
+      copy.status = item.status === "completed" ? "completed" : "todo";
+      copy.priority = item.priority === "high" ? "high" : "normal";
+      copy.dueAt = typeof item.dueAt === "string" ? item.dueAt : null;
+      copy.completedAt = typeof item.completedAt === "string" ? item.completedAt : null;
+    } else if (type === "reminders") {
+      copy.done = Boolean(item.done);
+      copy.remindAt = typeof item.remindAt === "string" ? item.remindAt : null;
+    } else if (type === "planning") {
+      copy.date = typeof item.date === "string" ? item.date : createdAt.slice(0, 10);
+      copy.time = typeof item.time === "string" ? item.time : null;
+      copy.type = typeof item.type === "string" ? item.type : "other";
+    } else if (type === "memories") {
+      copy.category = typeof item.category === "string" ? item.category : "general";
+      copy.updatedAt = typeof item.updatedAt === "string" ? item.updatedAt : createdAt;
+    }
+    return copy;
+  }
+
+  async function importDesktopData() {
+    if (!loadedTransfer || loadedTransfer.format !== "jarvis-desktop-v1" || !isPwaOrigin()) {
+      return setResponse("Import indisponible", "Chargez un export PC dans la PWA HTTPS pour continuer.");
+    }
+    if (phoneImportButton) phoneImportButton.disabled = true;
+    let imported = 0;
+    let duplicates = 0;
+    try {
+      const grouped = Object.fromEntries(TRANSFER_TYPES.map((type) => [type, []]));
+      for (const entry of loadedTransfer.items) grouped[entry.type].push(entry.item);
+      const prepared = {};
+      for (const type of TRANSFER_TYPES) {
+        const originals = getLocalItems(type);
+        const known = new Set(originals.map((item) => item.sourceId).filter(Boolean));
+        const copies = [];
+        let categoryDuplicates = 0;
+        for (const item of grouped[type]) {
+          const sourceId = `desktop:${type}:${item.id}`;
+          if (known.has(sourceId)) {
+            categoryDuplicates += 1;
+            continue;
+          }
+          copies.push(copyDesktopItem(type, item));
+          known.add(sourceId);
+        }
+        prepared[type] = { originals, copies, categoryDuplicates };
+      }
+      setResponse("Import en cours", `${loadedTransfer.items.length} element(s) a copier sur ce telephone. Gardez cette page ouverte.`);
+      for (const type of TRANSFER_TYPES) {
+        const { originals, copies, categoryDuplicates } = prepared[type];
+        if (copies.length && !saveLocalItems(type, [...copies, ...originals])) {
+          throw new Error(`Le stockage mobile refuse les ${type}. Liberez de l'espace et relancez l'import.`);
+        }
+        imported += copies.length;
+        duplicates += categoryDuplicates;
+      }
+      updateCounts();
+      setResponse("Import termine", `${imported} element(s) copies sur ce telephone, ${duplicates} deja presents. Les donnees PC restent intactes.`);
+      loadedTransfer = null;
+    } catch (error) {
+      setResponse("Import interrompu", `${imported} element(s) copies, ${duplicates} deja presents. ${error.message} Rechargez le fichier et relancez : les elements deja copies seront ignores.`);
+    } finally {
+      if (phoneImportButton) phoneImportButton.disabled = false;
+      updateLocalTransferUi();
     }
   }
 
@@ -478,6 +599,10 @@
       return false;
     }
     const transfer = getSelectedTransfer();
+    if (loadedTransfer && loadedTransfer.format !== "jarvis-mobile-v1") {
+      setResponse("Export incompatible", "Chargez un export mobile pour l'importer vers le PC.");
+      return false;
+    }
     const items = transfer.items;
     if (!items.length) {
       setResponse("Aucune donnee mobile", "Rien a importer depuis ce telephone.");
@@ -857,6 +982,8 @@
     if (bridgeDisconnectButton) bridgeDisconnectButton.addEventListener("click", disconnectBridge);
     if (localTransferButton) localTransferButton.addEventListener("click", importLocalData);
     if (localExportButton) localExportButton.addEventListener("click", exportLocalData);
+    if (desktopExportButton) desktopExportButton.addEventListener("click", exportDesktopData);
+    if (phoneImportButton) phoneImportButton.addEventListener("click", importDesktopData);
     if (localLoadButton && localLoadInput) localLoadButton.addEventListener("click", () => localLoadInput.click());
     if (localLoadInput) localLoadInput.addEventListener("change", loadLocalExport);
     if (bridgeCodeInput) {

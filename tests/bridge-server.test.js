@@ -3,7 +3,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const { createJarvisBridge } = require("../bridge-server");
+const { createJarvisBridge, createDesktopExport } = require("../bridge-server");
 const { mergeMobileItem, mergeMobileItems } = require("../mobile-import");
 
 test("Bridge serves mobile, pairs a device and protects local data", async () => {
@@ -65,6 +65,7 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
 
     const blockedData = await fetch(`${baseUrl}/bridge/data`);
     assert.equal(blockedData.status, 401);
+    assert.equal((await fetch(`${baseUrl}/bridge/export-mobile`)).status, 401);
 
     const invalidPair = await fetch(`${baseUrl}/bridge/pair`, {
       method: "POST",
@@ -100,6 +101,11 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     const dataResponse = await fetch(`${baseUrl}/bridge/data`, { headers: authHeaders });
     const dataPayload = await dataResponse.json();
     assert.equal(dataPayload.data.tasks[0].title, "Tester le Bridge");
+
+    const exportResponse = await fetch(`${baseUrl}/bridge/export-mobile`, { headers: authHeaders });
+    const exportPayload = await exportResponse.json();
+    assert.equal(exportPayload.export.format, "jarvis-desktop-v1");
+    assert.equal(exportPayload.export.items[0].item.title, "Tester le Bridge");
 
     const importBody = JSON.stringify({
       type: "notes",
@@ -151,6 +157,7 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     assert.equal(revoked.revoked, true);
     assert.equal(bridge.getStatus().connectedDevices, 0);
     assert.equal((await fetch(`${baseUrl}/bridge/data`, { headers: authHeaders })).status, 401);
+    assert.equal((await fetch(`${baseUrl}/bridge/export-mobile`, { headers: authHeaders })).status, 401);
 
     const crossOriginResponse = await fetch(`${baseUrl}/bridge/status`, {
       headers: { Origin: "https://example.com" }
@@ -162,4 +169,21 @@ test("Bridge serves mobile, pairs a device and protects local data", async () =>
     if (previousCode === undefined) delete process.env.JARVIS_BRIDGE_PAIR_CODE;
     else process.env.JARVIS_BRIDGE_PAIR_CODE = previousCode;
   }
+});
+
+test("l'export PC garde toutes les entrees utiles sans divulguer les secrets", () => {
+  const data = {
+    tasks: Array.from({ length: 65 }, (_, index) => ({
+      id: `task-${index}`, title: `Tache ${index}`, status: "todo", priority: "normal",
+      secret: "ne-jamais-exporter"
+    })),
+    notes: [{ id: "note-1", content: "Note privee", createdAt: "2026-10-18T10:00:00Z" }],
+    reminders: [], planning: [], memories: [],
+    bridgeToken: "secret-bridge", preferences: { theme: "cyan" }
+  };
+  const payload = createDesktopExport(data);
+  assert.equal(payload.items.length, 66);
+  assert.equal(payload.items[64].item.title, "Tache 64");
+  assert.doesNotMatch(JSON.stringify(payload), /ne-jamais-exporter|secret-bridge|preferences/);
+  assert.throws(() => createDesktopExport({ tasks: Array.from({ length: 5001 }, () => ({ id: "x" })) }), /5000/);
 });

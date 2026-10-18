@@ -19,12 +19,17 @@ function mergeMobileItem(data, payload, { now = () => new Date(), createId } = {
   }
   if (typeof createId !== "function") throw new TypeError("Un generateur d'identifiant est requis.");
 
-  const title = typeof item.content === "string" ? item.content.trim() : typeof item.title === "string" ? item.title.trim() : "";
-  if (!title || title.length > 1200) return { ok: false, message: "Le texte mobile doit contenir entre 1 et 1200 caracteres." };
-
   if (!Array.isArray(data.mobileImports)) data.mobileImports = [];
   if (data.mobileImports.includes(sourceId)) return { ok: true, imported: false, duplicate: true };
   if (!Array.isArray(data[type])) data[type] = [];
+  if (typeof item.sourceId === "string" && item.sourceId.startsWith(`desktop:${type}:`)
+    && data[type].some((record) => record.id === item.sourceId.slice(`desktop:${type}:`.length))) {
+    data.mobileImports.push(sourceId);
+    return { ok: true, imported: false, duplicate: true };
+  }
+
+  const title = typeof item.content === "string" ? item.content.trim() : typeof item.title === "string" ? item.title.trim() : "";
+  if (!title || title.length > 1200) return { ok: false, message: "Le texte mobile doit contenir entre 1 et 1200 caracteres." };
 
   const currentIso = now().toISOString();
   const createdAt = validIso(item.createdAt, currentIso);

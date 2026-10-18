@@ -7,6 +7,8 @@ const path = require("node:path");
 const DEFAULT_PORT = 3210;
 const MAX_BODY_BYTES = 16 * 1024;
 const MAX_IMPORT_BODY_BYTES = 512 * 1024;
+const MAX_EXPORT_ITEMS = 5000;
+const MAX_EXPORT_BYTES = 10 * 1024 * 1024;
 const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
 const PAIRING_WINDOW_MS = 60 * 1000;
 const MAX_PAIRING_ATTEMPTS = 5;
@@ -111,6 +113,45 @@ function sanitizeBridgeData(data = {}) {
   };
 }
 
+const EXPORT_FIELDS = {
+  tasks: ["id", "title", "status", "priority", "dueAt", "createdAt", "completedAt"],
+  notes: ["id", "content", "createdAt"],
+  reminders: ["id", "title", "remindAt", "done", "createdAt"],
+  planning: ["id", "title", "date", "time", "type", "createdAt"],
+  memories: ["id", "content", "category", "createdAt", "updatedAt"]
+};
+
+function createDesktopExport(data = {}) {
+  const items = [];
+  for (const [type, fields] of Object.entries(EXPORT_FIELDS)) {
+    const records = Array.isArray(data[type]) ? data[type] : [];
+    if (items.length + records.length > MAX_EXPORT_ITEMS) {
+      throw Object.assign(new Error("Export trop volumineux : plus de 5000 elements."), { statusCode: 413 });
+    }
+    for (const record of records) {
+      if (!record || typeof record.id !== "string" || !record.id.trim()) {
+        throw Object.assign(new Error(`Identifiant invalide dans ${type}.`), { statusCode: 422 });
+      }
+      const text = type === "notes" || type === "memories" ? record.content : record.title;
+      if (typeof text !== "string" || !text.trim()) {
+        throw Object.assign(new Error(`Texte invalide dans ${type}.`), { statusCode: 422 });
+      }
+      const item = {};
+      for (const field of fields) {
+        if (typeof record[field] === "string" || typeof record[field] === "boolean" || record[field] === null) {
+          item[field] = record[field];
+        }
+      }
+      items.push({ type, item });
+    }
+  }
+  const payload = { format: "jarvis-desktop-v1", exportedAt: new Date().toISOString(), items };
+  if (Buffer.byteLength(JSON.stringify(payload), "utf8") > MAX_EXPORT_BYTES) {
+    throw Object.assign(new Error("Export trop volumineux : plus de 10 Mo."), { statusCode: 413 });
+  }
+  return payload;
+}
+
 function createJarvisBridge(options = {}) {
   const rootDir = path.resolve(options.rootDir || __dirname);
   const requestedPort = Number(options.port ?? process.env.JARVIS_BRIDGE_PORT ?? DEFAULT_PORT);
@@ -118,7 +159,7 @@ function createJarvisBridge(options = {}) {
     ? requestedPort
     : DEFAULT_PORT;
   const host = options.host || "0.0.0.0";
-  const version = sanitizeText(options.version, 40) || "4.6.2";
+  const version = sanitizeText(options.version, 40) || "4.7.0";
   const model = sanitizeText(options.model, 120) || "llama3.2:3b";
   const sessions = new Map();
   const pairingAttempts = new Map();
@@ -387,6 +428,11 @@ function createJarvisBridge(options = {}) {
       return true;
     }
 
+    if (pathname === "/bridge/export-mobile" && request.method === "GET") {
+      sendJson(response, 200, { ok: true, export: createDesktopExport(await options.readData()) });
+      return true;
+    }
+
     if (pathname === "/bridge/summary" && request.method === "GET") {
       sendJson(response, 200, { ok: true, summary: await getBridgeSummary() });
       return true;
@@ -546,5 +592,6 @@ function createJarvisBridge(options = {}) {
 
 module.exports = {
   createJarvisBridge,
+  createDesktopExport,
   sanitizeBridgeData
 };

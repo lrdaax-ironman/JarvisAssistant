@@ -86,3 +86,17 @@ test("un element invalide annule tout le lot", () => {
   assert.equal(data.notes.length, 0);
   assert.equal(data.mobileImports.length, 0);
 });
+
+test("un element revenu du PC sur le mobile ne se duplique pas au retour", () => {
+  const { data, options } = fixture();
+  data.tasks.push({ id: "task-original", title: "Tache PC", status: "todo" });
+  const payload = {
+    deviceId: "telephone-1",
+    items: [{ type: "tasks", item: {
+      id: "copie-mobile", content: "Tache PC", sourceId: "desktop:tasks:task-original"
+    } }]
+  };
+  assert.deepEqual(mergeMobileItems(data, payload, options), { ok: true, imported: 0, duplicates: 1 });
+  assert.deepEqual(mergeMobileItems(data, payload, options), { ok: true, imported: 0, duplicates: 1 });
+  assert.equal(data.tasks.length, 1);
+});

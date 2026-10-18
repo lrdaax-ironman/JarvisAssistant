@@ -24,7 +24,7 @@ test("le cache hors ligne retrouve les scripts avec un parametre de version", as
 
   const request = {
     method: "GET", mode: "same-origin",
-    url: "https://jarvis.example/mobile.js?v=4.6.2"
+    url: "https://jarvis.example/mobile.js?v=4.7.0"
   };
   let responsePromise;
   handlers.get("fetch")({ request, respondWith: (promise) => { responsePromise = promise; } });

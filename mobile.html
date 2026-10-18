@@ -10,7 +10,7 @@
   <title>JARVIS Mobile</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-  <link rel="stylesheet" href="mobile.css?v=4.6.2" />
+  <link rel="stylesheet" href="mobile.css?v=4.7.0" />
 </head>
 <body>
   <main class="mobile-shell" id="mobile-app">
@@ -60,17 +60,19 @@
 
     <section class="local-transfer-panel" id="local-transfer-panel" aria-labelledby="local-transfer-title" hidden>
       <div class="section-heading">
-        <span>Donnees distinctes</span>
-        <h2 id="local-transfer-title">Donnees mobiles</h2>
+        <span>Transfert volontaire</span>
+        <h2 id="local-transfer-title">PC et telephone</h2>
       </div>
       <p><strong id="local-transfer-count">0 element</strong><span id="local-transfer-detail"> dans ce navigateur. La connexion au PC ne les transfere pas automatiquement.</span></p>
       <div class="local-transfer-actions">
         <button type="button" id="local-export-button">Exporter mes donnees</button>
-        <button type="button" id="local-load-button" hidden>Charger un export</button>
+        <button type="button" id="desktop-export-button" hidden>Exporter les donnees PC</button>
+        <button type="button" id="local-load-button">Charger un export JSON</button>
         <input id="local-load-input" type="file" accept="application/json,.json" hidden />
         <button type="button" id="local-transfer-button" hidden>Importer vers le PC</button>
+        <button type="button" id="phone-import-button" hidden>Importer sur ce telephone</button>
       </div>
-      <small>Sur Vercel, exportez d'abord vos donnees. Ouvrez ensuite la page Bridge du PC et chargez ce fichier. Les originaux restent sur le telephone.</small>
+      <small id="local-transfer-help">Pour copier du PC vers la PWA : ouvrez la page Bridge, exportez les donnees PC, puis chargez ce fichier dans votre PWA installee. Aucun original n'est supprime.</small>
     </section>
 
     <section class="mobile-grid-section" aria-labelledby="modules-title">
@@ -161,7 +163,7 @@
     <button type="submit" id="send-button">Envoyer</button>
   </form>
 
-  <script src="mobile-command-routing.js?v=4.6.2"></script>
-  <script src="mobile.js?v=4.6.2"></script>
+  <script src="mobile-command-routing.js?v=4.7.0"></script>
+  <script src="mobile.js?v=4.7.0"></script>
 </body>
 </html>

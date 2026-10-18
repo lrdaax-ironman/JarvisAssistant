@@ -10,7 +10,7 @@ const mobileSource = fs.readFileSync(path.join(__dirname, "..", "mobile.js"), "u
 const mobileMarkup = fs.readFileSync(path.join(__dirname, "..", "mobile.html"), "utf8");
 const cardCommands = [...new Set([...mobileMarkup.matchAll(/data-mobile-command="([^"]+)"/g)].map((match) => match[1]))];
 
-function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
+function createMobilePage({ initialStorage = {}, bridge = null, origin = { protocol: "https:", hostname: "jarvis.example" }, failStorageKeyOnce = null } = {}) {
   const values = new Map(Object.entries(initialStorage));
   const elements = new Map();
   const handlers = new Map();
@@ -23,6 +23,7 @@ function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
   const blobs = new Map();
   let downloadedContents = null;
   let nextImportedId = 0;
+  let failingKey = failStorageKeyOnce;
   const bridgeCalls = [];
 
   function element(id) {
@@ -40,7 +41,13 @@ function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
 
   const storage = {
     getItem(key) { return values.has(key) ? values.get(key) : null; },
-    setItem(key, value) { values.set(key, String(value)); },
+    setItem(key, value) {
+      if (key === failingKey) {
+        failingKey = null;
+        throw new Error("Storage full");
+      }
+      values.set(key, String(value));
+    },
     removeItem(key) { values.delete(key); }
   };
   const navigator = { platform: "Test", standalone: false };
@@ -83,6 +90,7 @@ function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
     let result;
     if (pathname === "/bridge/status") result = { ok: true, bridge: true, authenticated: true };
     else if (pathname === "/bridge/data") result = { ok: true, data: desktopData };
+    else if (pathname === "/bridge/export-mobile") result = { ok: true, export: bridge.exportPayload };
     else if (pathname === "/bridge/summary") result = { ok: true, summary: { counts: {}, ollama: { ok: true } } };
     else if (pathname === "/bridge/import-batch" && bridge.legacyImport) {
       result = { ok: false, message: "Route Bridge introuvable." };
@@ -102,7 +110,7 @@ function createMobilePage({ initialStorage = {}, bridge = null } = {}) {
 
   vm.runInNewContext(mobileSource, {
     window, document, navigator, localStorage: storage, fetch: fetchBridge,
-    location: { protocol: "https:", hostname: "localhost" }, AbortController, console, Date, Math,
+    location: origin, AbortController, console, Date, Math,
     Blob: FakeBlob, URL: urlApi
   });
 
@@ -256,4 +264,85 @@ test("parcours inter-origines : charge un export Vercel dans le Bridge", async (
   assert.equal(desktopData.notes[0].content, "Note Vercel");
   assert.deepEqual(desktopData.mobileImports, ["device-123:notes:offline-1"]);
   assert.equal(page.element("local-transfer-button").hidden, true);
+});
+
+test("parcours PC vers PWA : export, apercu, import volontaire et reprise sans doublons", async () => {
+  const desktopExport = {
+    format: "jarvis-desktop-v1", exportedAt: "2026-10-18T10:00:00Z",
+    items: [
+      { type: "tasks", item: { id: "task-1", title: "Livrer V4.7", status: "completed", priority: "high", completedAt: "2026-10-18T10:00:00Z" } },
+      { type: "notes", item: { id: "note-1", content: "Note PC" } },
+      { type: "reminders", item: { id: "reminder-1", title: "Verifier demain", remindAt: "2026-10-19T10:00:00Z", done: false } },
+      { type: "planning", item: { id: "planning-1", title: "Rendez-vous", date: "2026-10-19", time: "10:30", type: "personal" } },
+      { type: "memories", item: { id: "memory-1", content: "Projet Jarvis", category: "general" } }
+    ]
+  };
+  const bridgePage = createMobilePage({
+    initialStorage: { "jarvis-mobile:bridge-token": "secret-a-ne-pas-exporter" },
+    bridge: { data: { tasks: [], notes: [], reminders: [], planning: [], memories: [] }, exportPayload: desktopExport },
+    origin: { protocol: "http:", hostname: "192.168.1.20" }
+  });
+  await bridgePage.init();
+  assert.equal(bridgePage.element("desktop-export-button").hidden, false);
+  await bridgePage.element("desktop-export-button").listeners.click();
+  assert.ok(bridgePage.bridgeCalls.includes("/bridge/export-mobile"));
+  assert.doesNotMatch(bridgePage.downloaded(), /secret-a-ne-pas-exporter/);
+  assert.equal(JSON.parse(bridgePage.downloaded()).items.length, 5);
+
+  const pwaPage = createMobilePage({ initialStorage: {
+    "jarvis-mobile:notes": JSON.stringify([{ id: "local-note", content: "Original mobile" }])
+  } });
+  await pwaPage.init();
+  assert.equal(pwaPage.element("local-load-button").hidden, false);
+  assert.equal(pwaPage.element("phone-import-button").hidden, true);
+  const file = { size: 1000, text: async () => bridgePage.downloaded() };
+  await pwaPage.element("local-load-input").listeners.change({ target: { files: [file] } });
+  assert.match(pwaPage.element("assistant-response").innerHTML, /depuis le PC/);
+  assert.equal(pwaPage.element("phone-import-button").hidden, false);
+  assert.equal(pwaPage.element("local-transfer-button").hidden, true);
+  await pwaPage.element("phone-import-button").listeners.click();
+  assert.match(pwaPage.element("assistant-response").innerHTML, /5 element\(s\) copies/);
+  assert.equal(JSON.parse(pwaPage.storage.getItem("jarvis-mobile:notes")).length, 2);
+  assert.equal(JSON.parse(pwaPage.storage.getItem("jarvis-mobile:tasks"))[0].status, "completed");
+  assert.equal(JSON.parse(pwaPage.storage.getItem("jarvis-mobile:reminders"))[0].remindAt, "2026-10-19T10:00:00Z");
+  assert.equal(JSON.parse(pwaPage.storage.getItem("jarvis-mobile:planning"))[0].time, "10:30");
+
+  await pwaPage.element("local-load-input").listeners.change({ target: { files: [file] } });
+  await pwaPage.element("phone-import-button").listeners.click();
+  assert.match(pwaPage.element("assistant-response").innerHTML, /5 deja presents/);
+  assert.equal(JSON.parse(pwaPage.storage.getItem("jarvis-mobile:notes")).length, 2);
+});
+
+test("un export invalide ne peut pas importer de donnees PC", async () => {
+  const page = createMobilePage();
+  await page.init();
+  await page.element("local-load-input").listeners.change({ target: {
+    files: [{ size: 100, text: async () => JSON.stringify({
+      format: "jarvis-desktop-v1", items: [{ type: "unknown", item: { id: "x" } }]
+    }) }]
+  } });
+  assert.match(page.element("assistant-response").innerHTML, /Export refuse/);
+  assert.equal(page.element("phone-import-button").hidden, true);
+});
+
+test("un import PC interrompu reprend sans dupliquer les categories deja sauvegardees", async () => {
+  const page = createMobilePage({ failStorageKeyOnce: "jarvis-mobile:notes" });
+  await page.init();
+  const file = { size: 300, text: async () => JSON.stringify({
+    format: "jarvis-desktop-v1", items: [
+      { type: "tasks", item: { id: "task-pc", title: "A faire" } },
+      { type: "notes", item: { id: "note-pc", content: "A retenir" } }
+    ]
+  }) };
+  await page.element("local-load-input").listeners.change({ target: { files: [file] } });
+  await page.element("phone-import-button").listeners.click();
+  assert.match(page.element("assistant-response").innerHTML, /Import interrompu/);
+  assert.equal(JSON.parse(page.storage.getItem("jarvis-mobile:tasks")).length, 1);
+  assert.equal(page.storage.getItem("jarvis-mobile:notes"), null);
+
+  await page.element("local-load-input").listeners.change({ target: { files: [file] } });
+  await page.element("phone-import-button").listeners.click();
+  assert.match(page.element("assistant-response").innerHTML, /1 deja presents/);
+  assert.equal(JSON.parse(page.storage.getItem("jarvis-mobile:tasks")).length, 1);
+  assert.equal(JSON.parse(page.storage.getItem("jarvis-mobile:notes")).length, 1);
 });

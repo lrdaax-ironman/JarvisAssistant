@@ -28,6 +28,14 @@ Correctif V4.6.1 : toucher une carte mobile ramene la reponse dans la zone visib
 
 Correctif V4.6.2 : l'import mobile vers le PC affiche sa progression immediatement, copie les donnees par lots transactionnels et confirme la copie sans attendre Ollama. Si le Bridge desktop est encore en V4.6.0 ou V4.6.1, la page mobile utilise automatiquement l'ancienne route d'import. En cas d'interruption, relancer l'import ne cree pas de doublons et ne supprime pas les donnees du telephone.
 
+## Transfert bidirectionnel V4.7
+
+- **Mobile vers PC** : dans la PWA, `Exporter mes donnees`; sur la page Bridge associee, `Charger un export JSON`, puis `Importer vers le PC`.
+- **PC vers mobile** : sur la page Bridge associee, `Exporter les donnees PC`; dans la PWA installee ou la page HTTPS Vercel, `Charger un export JSON`, puis `Importer sur ce telephone`.
+- Le fichier PC contient uniquement taches, notes, rappels, planning et memoires. Il ne contient pas de code d'association, de jeton Bridge ni de reglages systeme. Gardez ce fichier prive et supprimez-le apres le transfert si vous n'en avez plus besoin.
+- Les deux pages ont des stockages navigateur distincts : importer dans la page Bridge ne remplit pas la PWA. Les originaux restent en place. Un import repete ignore les elements deja copies depuis le meme PC; si l'espace du navigateur manque, liberez-en puis rechargez le fichier pour reprendre.
+- Maximum : 5000 elements et 10 Mo. Aucune synchronisation automatique, aucun service externe.
+
 ## Version PWA mobile
 
 JARVIS dispose d'une version mobile dediee avec deux fonctionnements : autonome sur le web, ou reliee au desktop par le Bridge local.
@@ -83,7 +91,7 @@ Notes :
 - La version mobile utilise `localStorage` pour les notes, taches, rappels, planning, memoire et preferences simples.
 - `mobile.js` ne depend pas de `window.jarvisAPI` et reste stable dans un navigateur mobile.
 - Le service worker est enregistre uniquement en contexte web `http` ou `https`, pas en `file://` Electron.
-- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v8` utilise une strategie network-first pour les fichiers d'interface.
+- Si le mobile garde un ancien rendu, fermer l'onglet puis rouvrir `mobile.html`. Le service worker `jarvis-mobile-v9` utilise une strategie network-first pour les fichiers d'interface.
 
 ## Consolidation V4.3
 
